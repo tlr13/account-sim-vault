@@ -155,7 +155,14 @@ export interface VaultData {
   otherAssets: OtherAsset[];
 }
 
-export type SyncProviderType = 'local' | 'github' | 'supabase';
+export type SyncProviderType = 'local' | 'gsheets' | 'github' | 'supabase';
+
+export interface GoogleSheetsSyncConfig {
+  scriptUrl: string;
+  apiKey: string;
+  autoSync: boolean;
+  autoPull: boolean;
+}
 
 export interface GitHubSyncConfig {
   owner: string;
@@ -166,6 +173,7 @@ export interface GitHubSyncConfig {
   encryptData: boolean;
   passphrase: string;
   autoSync: boolean;
+  autoPull: boolean;
   lastSha?: string;
 }
 
@@ -173,10 +181,12 @@ export interface SupabaseSyncConfig {
   url: string;
   anonKey: string;
   autoSync: boolean;
+  autoPull: boolean;
 }
 
 export interface SyncSettings {
   mode: SyncProviderType;
+  gsheets: GoogleSheetsSyncConfig;
   github: GitHubSyncConfig;
   supabase: SupabaseSyncConfig;
 }

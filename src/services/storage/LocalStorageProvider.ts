@@ -13,8 +13,14 @@ export function getDefaultSyncSettings(): SyncSettings {
   const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
   return {
     mode: envUrl && envKey ? 'supabase' : 'local',
+    gsheets: {
+      scriptUrl: '',
+      apiKey: '',
+      autoSync: true,
+      autoPull: true,
+    },
     github: {
-      owner: '',
+      owner: 'tlr13',
       repo: 'accvault-private-data',
       branch: 'main',
       filePath: 'vault-data.json',
@@ -22,12 +28,14 @@ export function getDefaultSyncSettings(): SyncSettings {
       encryptData: false,
       passphrase: '',
       autoSync: true,
+      autoPull: true,
       lastSha: '',
     },
     supabase: {
       url: envUrl,
       anonKey: envKey,
       autoSync: true,
+      autoPull: true,
     },
   };
 }
@@ -65,6 +73,7 @@ export function loadSyncSettings(): SyncSettings {
     const parsed = JSON.parse(raw) as Partial<SyncSettings>;
     return {
       mode: parsed.mode ?? defaults.mode,
+      gsheets: { ...defaults.gsheets, ...(parsed.gsheets ?? {}) },
       github: { ...defaults.github, ...(parsed.github ?? {}) },
       supabase: { ...defaults.supabase, ...(parsed.supabase ?? {}) },
     };

@@ -39,6 +39,11 @@ import {
   pushVaultToGitHub,
 } from './services/storage/GitHubStorageProvider';
 import {
+  parsePairingHash,
+  pullVaultFromGoogleSheets,
+  pushVaultToGoogleSheets,
+} from './services/storage/GoogleSheetsStorageProvider';
+import {
   loadLocalVault,
   loadPrivacyPreference,
   loadSyncSettings,
@@ -78,9 +83,50 @@ import {
 } from './utils/calendarIcs';
 import { getSimHealth, getSubscriptionHealth } from './utils/simStatus';
 
+function loadInitialSettingsWithPairing(): { settings: SyncSettings; paired: boolean } {
+  const base = loadSyncSettings();
+  if (typeof window === 'undefined') return { settings: base, paired: false };
+
+  const pairing = parsePairingHash(window.location.hash);
+  if (!pairing) return { settings: base, paired: false };
+
+  // Strip #pair=... immediately from browser URL so secrets do not linger in address bar
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+  let next: SyncSettings = base;
+  if (pairing.mode === 'gsheets' && pairing.gsheets) {
+    next = {
+      ...base,
+      mode: 'gsheets',
+      gsheets: {
+        ...base.gsheets,
+        scriptUrl: pairing.gsheets.scriptUrl,
+        apiKey: pairing.gsheets.apiKey,
+        autoSync: true,
+        autoPull: true,
+      },
+    };
+  } else if (pairing.mode === 'github' && pairing.github) {
+    next = {
+      ...base,
+      mode: 'github',
+      github: {
+        ...base.github,
+        ...pairing.github,
+        autoSync: true,
+        autoPull: true,
+      },
+    };
+  }
+
+  saveSyncSettings(next);
+  return { settings: next, paired: true };
+}
+
 export default function App() {
   const [vault, setVault] = useState<VaultData>(() => loadLocalVault());
-  const [settings, setSettings] = useState<SyncSettings>(() => loadSyncSettings());
+  const [bootState] = useState(() => loadInitialSettingsWithPairing());
+  const [settings, setSettings] = useState<SyncSettings>(() => bootState.settings);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => loadThemePreference());
   const [privacyMask, setPrivacyMask] = useState<boolean>(() => loadPrivacyPreference());
 
@@ -98,6 +144,7 @@ export default function App() {
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   const [lastSyncText, setLastSyncText] = useState('');
   const syncTimerRef = useRef<number | null>(null);
+  const lastPullTimestampRef = useRef<number>(0);
 
   // Modal states
   const [accountModal, setAccountModal] = useState<{ open: boolean; editing: GoogleAccount | null }>({
@@ -164,7 +211,12 @@ export default function App() {
   useEffect(() => {
     let active = true;
     if (!supabaseUrl || !supabaseAnonKey) return;
-    getSupabaseUser({ url: supabaseUrl, anonKey: supabaseAnonKey, autoSync: false })
+    getSupabaseUser({
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
+      autoSync: false,
+      autoPull: false,
+    })
       .then((user) => {
         if (active) setSupabaseUser(user);
       })
@@ -188,7 +240,15 @@ export default function App() {
       if (currentSettings.mode === 'local') return;
       setSyncState('syncing');
       try {
-        if (currentSettings.mode === 'github') {
+        if (currentSettings.mode === 'gsheets') {
+          await pushVaultToGoogleSheets(currentSettings.gsheets, dataToPush);
+          lastPullTimestampRef.current = Date.now();
+          setSyncState('synced');
+          setLastSyncText(
+            `Tersimpan ke Google Sheets · ${new Date().toLocaleTimeString('id-ID')}`
+          );
+          if (!silent) showToast('Data berhasil disimpan ke Google Sheets!');
+        } else if (currentSettings.mode === 'github') {
           const result = await pushVaultToGitHub(currentSettings.github, dataToPush);
           const updated: SyncSettings = {
             ...currentSettings,
@@ -196,11 +256,13 @@ export default function App() {
           };
           setSettings(updated);
           saveSyncSettings(updated);
+          lastPullTimestampRef.current = Date.now();
           setSyncState('synced');
           setLastSyncText(`Tersinkron ke GitHub · ${new Date().toLocaleTimeString('id-ID')}`);
           if (!silent) showToast('Data berhasil disimpan ke GitHub Private Repo!');
         } else if (currentSettings.mode === 'supabase') {
           await pushVaultToSupabase(currentSettings.supabase, dataToPush);
+          lastPullTimestampRef.current = Date.now();
           setSyncState('synced');
           setLastSyncText(`Tersinkron ke Supabase · ${new Date().toLocaleTimeString('id-ID')}`);
           if (!silent) showToast('Data berhasil disimpan ke Supabase!');
@@ -213,44 +275,112 @@ export default function App() {
     [showToast]
   );
 
-  const pullFromActiveCloud = useCallback(async () => {
-    if (settings.mode === 'local') {
-      showToast('Saat ini berada di Mode Lokal.');
-      return;
-    }
-    setSyncState('syncing');
-    try {
-      if (settings.mode === 'github') {
-        const res = await pullVaultFromGitHub(settings.github);
-        if (res.wasEmpty || !res.vault) {
-          showToast('File belum ada di repo GitHub. Klik Push untuk menyimpan data pertama.');
-          setSyncState('idle');
-          return;
-        }
-        setVault(res.vault);
-        saveLocalVault(res.vault);
-        const updated: SyncSettings = {
-          ...settings,
-          github: { ...settings.github, lastSha: res.sha },
-        };
-        setSettings(updated);
-        saveSyncSettings(updated);
-        setSyncState('synced');
-        setLastSyncText(`Ditarik dari GitHub · ${new Date().toLocaleTimeString('id-ID')}`);
-        showToast('Data terbaru berhasil ditarik dari GitHub!');
-      } else if (settings.mode === 'supabase') {
-        const remote = await pullVaultFromSupabase(settings.supabase);
-        setVault(remote);
-        saveLocalVault(remote);
-        setSyncState('synced');
-        setLastSyncText(`Ditarik dari Supabase · ${new Date().toLocaleTimeString('id-ID')}`);
-        showToast('Data terbaru berhasil ditarik dari Supabase!');
+  const pullFromActiveCloud = useCallback(
+    async (silent = false) => {
+      if (settings.mode === 'local') {
+        if (!silent) showToast('Saat ini berada di Mode Lokal.');
+        return;
       }
-    } catch (err) {
-      setSyncState('error');
-      showToast(err instanceof Error ? err.message : 'Gagal menarik data cloud.', 'error');
-    }
-  }, [settings, showToast]);
+      setSyncState('syncing');
+      try {
+        if (settings.mode === 'gsheets') {
+          const res = await pullVaultFromGoogleSheets(settings.gsheets);
+          setVault(res.vault);
+          saveLocalVault(res.vault);
+          lastPullTimestampRef.current = Date.now();
+          setSyncState('synced');
+          setLastSyncText(
+            `Auto-sync Google Sheets · ${new Date().toLocaleTimeString('id-ID')}`
+          );
+          if (!silent) {
+            showToast(
+              `Data terbaru ditarik (${res.vault.googleAccounts.length} akun, ${res.vault.phoneNumbers.length} SIM)`
+            );
+          }
+        } else if (settings.mode === 'github') {
+          const res = await pullVaultFromGitHub(settings.github);
+          if (res.wasEmpty || !res.vault) {
+            if (!silent) {
+              showToast('File belum ada di repo GitHub. Klik Push untuk menyimpan data pertama.');
+            }
+            setSyncState('idle');
+            return;
+          }
+          setVault(res.vault);
+          saveLocalVault(res.vault);
+          const updated: SyncSettings = {
+            ...settings,
+            github: { ...settings.github, lastSha: res.sha },
+          };
+          setSettings(updated);
+          saveSyncSettings(updated);
+          lastPullTimestampRef.current = Date.now();
+          setSyncState('synced');
+          setLastSyncText(`Ditarik dari GitHub · ${new Date().toLocaleTimeString('id-ID')}`);
+          if (!silent) showToast('Data terbaru berhasil ditarik dari GitHub!');
+        } else if (settings.mode === 'supabase') {
+          const remote = await pullVaultFromSupabase(settings.supabase);
+          setVault(remote);
+          saveLocalVault(remote);
+          lastPullTimestampRef.current = Date.now();
+          setSyncState('synced');
+          setLastSyncText(`Ditarik dari Supabase · ${new Date().toLocaleTimeString('id-ID')}`);
+          if (!silent) showToast('Data terbaru berhasil ditarik dari Supabase!');
+        }
+      } catch (err) {
+        setSyncState('error');
+        if (!silent) {
+          showToast(err instanceof Error ? err.message : 'Gagal menarik data cloud.', 'error');
+        }
+      }
+    },
+    [settings, showToast]
+  );
+
+  // Auto-Pull on mount and when returning to the app tab on HP / Laptop
+  const canAutoPull =
+    (settings.mode === 'gsheets' &&
+      settings.gsheets.autoPull &&
+      Boolean(settings.gsheets.scriptUrl.trim())) ||
+    (settings.mode === 'github' &&
+      settings.github.autoPull &&
+      Boolean(settings.github.token.trim())) ||
+    (settings.mode === 'supabase' &&
+      settings.supabase.autoPull &&
+      Boolean(activeSupabaseUser));
+
+  const autoPullRef = useRef({ canAutoPull, pull: pullFromActiveCloud });
+  useEffect(() => {
+    autoPullRef.current = { canAutoPull, pull: pullFromActiveCloud };
+  }, [canAutoPull, pullFromActiveCloud]);
+
+  useEffect(() => {
+    const triggerPull = (forceNotify: boolean) => {
+      const { canAutoPull: enabled, pull } = autoPullRef.current;
+      if (!enabled) return;
+      // Do not overwrite pending local edits waiting to push
+      if (syncTimerRef.current !== null) return;
+      const elapsed = Date.now() - lastPullTimestampRef.current;
+      if (!forceNotify && elapsed < 15_000) return;
+      void pull(!forceNotify);
+    };
+
+    // Initial pull on boot (show toast if device just paired via QR)
+    const initialTimer = window.setTimeout(() => {
+      triggerPull(bootState.paired);
+    }, 150);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        triggerPull(false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearTimeout(initialTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [bootState.paired]);
 
   const commitVault = useCallback(
     (updater: (prev: VaultData) => VaultData) => {
@@ -259,12 +389,20 @@ export default function App() {
         saveLocalVault(next);
 
         const shouldAutoPush =
-          (settings.mode === 'github' && settings.github.autoSync && Boolean(settings.github.token)) ||
-          (settings.mode === 'supabase' && settings.supabase.autoSync && Boolean(activeSupabaseUser));
+          (settings.mode === 'gsheets' &&
+            settings.gsheets.autoSync &&
+            Boolean(settings.gsheets.scriptUrl.trim())) ||
+          (settings.mode === 'github' &&
+            settings.github.autoSync &&
+            Boolean(settings.github.token.trim())) ||
+          (settings.mode === 'supabase' &&
+            settings.supabase.autoSync &&
+            Boolean(activeSupabaseUser));
 
         if (shouldAutoPush) {
           if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
           syncTimerRef.current = window.setTimeout(() => {
+            syncTimerRef.current = null;
             void pushToActiveCloud(next, settings, true);
           }, 900);
         }
@@ -276,13 +414,15 @@ export default function App() {
 
   const handleCopy = useCallback(
     (text: string, label: string) => {
+      const compactPreview =
+        text.includes('\n') || text.length > 60 ? '' : `: ${text}`;
       if (navigator.clipboard?.writeText) {
         navigator.clipboard
           .writeText(text)
-          .then(() => showToast(`${label}: ${text}`))
+          .then(() => showToast(`${label}${compactPreview}`))
           .catch(() => showToast('Gagal menyalin ke clipboard.', 'error'));
       } else {
-        showToast(`${label}: ${text}`);
+        showToast(`${label}${compactPreview}`);
       }
     },
     [showToast]
@@ -553,13 +693,17 @@ export default function App() {
   };
 
   const syncModeLabel =
-    settings.mode === 'github'
-      ? 'Sync: GitHub Private'
-      : settings.mode === 'supabase'
-        ? activeSupabaseUser
-          ? 'Sync: Supabase Aktif'
-          : 'Supabase (Belum Login)'
-        : 'Mode Lokal';
+    settings.mode === 'gsheets'
+      ? settings.gsheets.scriptUrl
+        ? 'Sync: Google Sheets'
+        : 'Sheets (Belum diatur)'
+      : settings.mode === 'github'
+        ? 'Sync: GitHub Private'
+        : settings.mode === 'supabase'
+          ? activeSupabaseUser
+            ? 'Sync: Supabase Aktif'
+            : 'Supabase (Belum Login)'
+          : 'Mode Lokal';
 
   return (
     <div className="app-shell">
@@ -688,7 +832,7 @@ export default function App() {
                 className="btn btn-icon"
                 title="Tarik data terbaru dari cloud"
                 disabled={syncState === 'syncing'}
-                onClick={pullFromActiveCloud}
+                onClick={() => void pullFromActiveCloud(false)}
               >
                 <RefreshCw size={16} />
               </button>
@@ -866,7 +1010,7 @@ export default function App() {
               lastSyncText={lastSyncText}
               onUpdateSettings={handleUpdateSettings}
               onSupabaseUserChange={setSupabaseUser}
-              onPullCloud={pullFromActiveCloud}
+              onPullCloud={() => pullFromActiveCloud(false)}
               onPushCloud={() => pushToActiveCloud(vault, settings, false)}
               onImportVault={(imported) => commitVault(() => imported)}
               onOpenImport={() => setImportOpen(true)}
@@ -891,6 +1035,7 @@ export default function App() {
                   showToast('Semua data dikosongkan. Siap diisi data milikmu!');
                 }
               }}
+              onCopy={handleCopy}
               onToast={showToast}
             />
           )}

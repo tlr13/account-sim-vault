@@ -37,16 +37,23 @@ Repository ini sudah dilengkapi workflow otomatis [`.github/workflows/deploy.yml
 
 ---
 
-## Pilihan Sinkronisasi Laptop ↔ HP
+## Pilihan Sinkronisasi Laptop ↔ HP (Mendukung Auto-Pull & Auto-Push 2 Arah)
 
 Buka menu **Sync & Setelan** di dalam aplikasi dan pilih salah satu mode:
 
-### Opsi 1: 100% GitHub (Private Repository — Tanpa Auto-Pause)
+### Opsi 1: Google Sheets + Apps Script *(Rekomendasi — Gratis Selamanya, Bisa Edit di Web & Sheets)*
+1. Buka Google Sheets AccVault milikmu → klik **Extensions → Apps Script**.
+2. Hapus kode bawaan, tempel isi [`google-apps-script/Code.gs`](google-apps-script/Code.gs) (bisa juga disalin 1-klik langsung dari dalam menu **Sync & Setelan → Google Sheets** di aplikasi), lalu simpan (`Ctrl+S`).
+3. Klik **Deploy → New deployment** → pilih tipe **Web app** → *Execute as: Me*, *Who has access: Anyone* → klik **Deploy** → izinkan akses → salin **Web app URL** (`/exec`).
+4. Tempel URL tersebut di **AccVault → Sync & Setelan → Google Sheets (Apps Script)** lalu klik **Tarik Data dari Sheets (Pull)**.
+5. Untuk menghubungkan HP dengan cepat tanpa copy-paste URL panjang, klik **Hubungkan HP (QR)** lalu scan dengan kamera HP!
+
+### Opsi 2: 100% GitHub (Private Repository — Tanpa Auto-Pause)
 1. Buat 1 repository **Private** baru di GitHub khusus data (mis. `accvault-private-data`), centang **Add a README file**.
 2. Buat *Fine-grained Personal Access Token* dengan izin `Contents: Read and write` khusus untuk 1 repo data tersebut saja.
 3. Masukkan Username, nama repo, dan token di **AccVault → Sync & Setelan → 100% GitHub**, aktifkan **Enkripsi AES-256** (opsional), lalu klik **Tes Koneksi Repo** & **Push**.
 
-### Opsi 2: Supabase Cloud (Login Email/Password + PostgreSQL RLS)
+### Opsi 3: Supabase Cloud (Login Email/Password + PostgreSQL RLS)
 1. Buat project gratis di [Supabase](https://supabase.com).
 2. Jalankan seluruh isi [`supabase/schema.sql`](supabase/schema.sql) di **SQL Editor** (aman dijalankan ulang untuk migrasi kolom baru).
 3. Buat 1 user di **Authentication → Users** lalu matikan publik **Allow new users to sign up**.

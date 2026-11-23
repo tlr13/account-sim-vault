@@ -1,8 +1,10 @@
 import type { User } from '@supabase/supabase-js';
 import {
+  ChevronDown,
   Cloud,
   CloudDownload,
   CloudUpload,
+  Copy,
   Database,
   Download,
   FileSpreadsheet,
@@ -11,13 +13,17 @@ import {
   Lock,
   LogIn,
   LogOut,
+  QrCode,
   RotateCcw,
   ShieldAlert,
+  Table2,
   Trash2,
   Upload,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
+import appsScriptSource from '../../../google-apps-script/Code.gs?raw';
 import { testGitHubConnection } from '../../services/storage/GitHubStorageProvider';
+import { testGoogleSheetsConnection } from '../../services/storage/GoogleSheetsStorageProvider';
 import {
   signInSupabase,
   signOutSupabase,
@@ -28,6 +34,7 @@ import {
   exportVaultToJson,
   parseVaultFromJson,
 } from '../../utils/backupIO';
+import { QrPairModal } from './QrPairModal';
 
 interface SettingsViewProps {
   vault: VaultData;
@@ -43,6 +50,7 @@ interface SettingsViewProps {
   onOpenImport: () => void;
   onLoadSampleData: () => void;
   onClearAllData: () => void;
+  onCopy: (text: string, label: string) => void;
   onToast: (text: string, tone?: 'default' | 'error') => void;
 }
 
@@ -60,16 +68,31 @@ export function SettingsView({
   onOpenImport,
   onLoadSampleData,
   onClearAllData,
+  onCopy,
   onToast,
 }: SettingsViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [testingSheets, setTestingSheets] = useState(false);
   const [testingGh, setTestingGh] = useState(false);
   const [sbEmail, setSbEmail] = useState('');
   const [sbPassword, setSbPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   const setMode = (mode: SyncProviderType) => {
     onUpdateSettings({ ...settings, mode });
+  };
+
+  const handleTestSheets = async () => {
+    setTestingSheets(true);
+    try {
+      const msg = await testGoogleSheetsConnection(settings.gsheets);
+      onToast(msg);
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Gagal tes koneksi Google Sheets.', 'error');
+    } finally {
+      setTestingSheets(false);
+    }
   };
 
   const handleTestGitHub = async () => {
@@ -121,7 +144,7 @@ export function SettingsView({
         const parsed = parseVaultFromJson(String(reader.result ?? ''));
         onImportVault(parsed);
         onToast(
-          `Berhasil import ${parsed.googleAccounts.length} akun Google & ${parsed.phoneNumbers.length} kartu SIM.`
+          `Berhasil import ${parsed.googleAccounts.length} akun email & ${parsed.phoneNumbers.length} kartu SIM.`
         );
       } catch (err) {
         onToast(err instanceof Error ? err.message : 'Gagal membaca file JSON.', 'error');
@@ -138,8 +161,8 @@ export function SettingsView({
         <div>
           <h1 className="page-title">Sinkronisasi &amp; Pengaturan</h1>
           <p className="page-subtitle">
-            Pilih penyimpanan untuk sinkron otomatis Laptop &amp; HP, atau export backup ke
-            Excel/JSON.
+            Sambungkan ke Google Sheets (Apps Script), 100% GitHub Private Repo, atau Supabase
+            untuk sinkron otomatis 2 arah antara Laptop &amp; HP.
           </p>
         </div>
       </div>
@@ -159,11 +182,20 @@ export function SettingsView({
           <button
             type="button"
             role="tab"
+            aria-selected={settings.mode === 'gsheets'}
+            className={`segmented-tab${settings.mode === 'gsheets' ? ' active' : ''}`}
+            onClick={() => setMode('gsheets')}
+          >
+            <Table2 size={15} /> Google Sheets (Apps Script)
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={settings.mode === 'local'}
             className={`segmented-tab${settings.mode === 'local' ? ' active' : ''}`}
             onClick={() => setMode('local')}
           >
-            <HardDrive size={15} /> Lokal (Perangkat Ini)
+            <HardDrive size={15} /> Lokal
           </button>
           <button
             type="button"
@@ -172,7 +204,7 @@ export function SettingsView({
             className={`segmented-tab${settings.mode === 'github' ? ' active' : ''}`}
             onClick={() => setMode('github')}
           >
-            <GitBranch size={15} /> 100% GitHub (Private Repo)
+            <GitBranch size={15} /> 100% GitHub
           </button>
           <button
             type="button"
@@ -181,9 +213,174 @@ export function SettingsView({
             className={`segmented-tab${settings.mode === 'supabase' ? ' active' : ''}`}
             onClick={() => setMode('supabase')}
           >
-            <Database size={15} /> Supabase Cloud
+            <Database size={15} /> Supabase
           </button>
         </div>
+
+        {/* Google Sheets (Apps Script) Mode */}
+        {settings.mode === 'gsheets' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="callout-box success">
+              <Table2 size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <strong>Mode Google Sheets (2 Arah + Auto-Pull):</strong> Kamu bisa edit langsung
+                dari <strong>Web AccVault</strong> (HP/Laptop) maupun edit massal di{' '}
+                <strong>Google Sheets</strong>. Tidak ada auto-pause 7 hari dan tidak butuh token
+                GitHub atau akun Supabase.
+              </div>
+            </div>
+
+            <div className="form-grid-2">
+              <div className="form-field">
+                <label className="form-label" htmlFor="gs-url">
+                  Web App URL Google Apps Script (berakhiran /exec) *
+                </label>
+                <input
+                  id="gs-url"
+                  type="url"
+                  className="form-input mono"
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                  value={settings.gsheets.scriptUrl}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      gsheets: { ...settings.gsheets, scriptUrl: e.target.value },
+                    })
+                  }
+                />
+              </div>
+
+              <div className="form-field">
+                <label className="form-label" htmlFor="gs-key">
+                  PIN / API Secret (Opsional — samakan dengan API_SECRET di Code.gs)
+                </label>
+                <input
+                  id="gs-key"
+                  type="password"
+                  className="form-input mono"
+                  placeholder="Biarkan kosong jika tidak pakai PIN"
+                  value={settings.gsheets.apiKey}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      gsheets: { ...settings.gsheets, apiKey: e.target.value },
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.gsheets.autoPull}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      gsheets: { ...settings.gsheets, autoPull: e.target.checked },
+                    })
+                  }
+                />
+                <span>
+                  <strong>Auto-Pull otomatis</strong> setiap kali membuka aplikasi atau kembali ke
+                  tab di HP/Laptop
+                </span>
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.gsheets.autoSync}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      gsheets: { ...settings.gsheets, autoSync: e.target.checked },
+                    })
+                  }
+                />
+                <span>
+                  <strong>Auto-Push otomatis</strong> ke Google Sheets setiap kali ada perubahan di
+                  web
+                </span>
+              </label>
+            </div>
+
+            <div className="filter-bar">
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={testingSheets}
+                onClick={handleTestSheets}
+              >
+                {testingSheets ? 'Menguji...' : 'Tes Koneksi Sheets'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                disabled={syncBusy}
+                onClick={onPullCloud}
+              >
+                <CloudDownload size={14} /> Tarik Data dari Sheets (Pull)
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={syncBusy}
+                onClick={onPushCloud}
+              >
+                <CloudUpload size={14} /> Simpan ke Sheets (Push)
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={!settings.gsheets.scriptUrl.trim()}
+                onClick={() => setQrOpen(true)}
+              >
+                <QrCode size={14} /> Hubungkan HP (QR)
+              </button>
+            </div>
+
+            <details className="collapsible-section">
+              <summary>
+                <span>Panduan Pasang Apps Script (4 Langkah) &amp; Salin Kode Code.gs</span>
+                <ChevronDown size={15} />
+              </summary>
+              <div className="collapsible-body" style={{ fontSize: 13 }}>
+                <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <li>
+                    Buka Google Sheets <strong>AccVault - Peta Akun Email &amp; Kartu SIM</strong>{' '}
+                    di Google Drive → klik menu <strong>Extensions → Apps Script</strong>.
+                  </li>
+                  <li>
+                    Hapus kode bawaan, klik tombol <strong>Salin Kode Code.gs</strong> di bawah,
+                    tempel ke editor Apps Script, lalu simpan (<code>Ctrl+S</code>).
+                  </li>
+                  <li>
+                    Klik <strong>Deploy → New deployment</strong> → pilih tipe{' '}
+                    <strong>Web app</strong> → atur <em>Execute as: Me</em> &amp;{' '}
+                    <em>Who has access: Anyone</em> → klik <strong>Deploy</strong> &amp; izinkan
+                    akses.
+                  </li>
+                  <li>
+                    Salin <strong>Web app URL</strong> (berakhiran <code>/exec</code>), tempel di
+                    kolom URL di atas, lalu klik <strong>Tarik Data dari Sheets (Pull)</strong>!
+                  </li>
+                </ol>
+                <div>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={() => onCopy(appsScriptSource, 'Kode Code.gs disalin!')}
+                  >
+                    <Copy size={13} /> Salin Kode Code.gs ({appsScriptSource.split('\n').length}{' '}
+                    baris)
+                  </button>
+                </div>
+              </div>
+            </details>
+          </div>
+        )}
 
         {settings.mode === 'local' && (
           <div className="callout-box">
@@ -191,7 +388,8 @@ export function SettingsView({
             <div>
               <strong>Mode Lokal Aktif:</strong> Semua data tersimpan di browser perangkat ini
               (100% offline &amp; langsung jalan). Untuk sinkronisasi otomatis antara Laptop dan HP,
-              pilih tab <strong>100% GitHub</strong> atau <strong>Supabase Cloud</strong> di atas.
+              pilih tab <strong>Google Sheets (Apps Script)</strong>, <strong>100% GitHub</strong>
+              , atau <strong>Supabase</strong> di atas.
             </div>
           </div>
         )}
@@ -201,10 +399,10 @@ export function SettingsView({
             <div className="callout-box">
               <GitBranch size={17} style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
-                <strong>Mode 100% GitHub (Tanpa Auto-Pause):</strong> Data disimpan sebagai file
-                JSON di <strong>Private Repository GitHub</strong> milikmu sendiri. Buat token
-                Fine-grained PAT di GitHub dengan izin <code>Contents: Read and write</code> khusus
-                ke 1 repo data tersebut saja.
+                <strong>Mode 100% GitHub (Private Repo):</strong> Data disimpan sebagai file JSON di{' '}
+                <strong>Private Repository GitHub</strong> milikmu sendiri. Buat token Fine-grained
+                PAT dengan izin <code>Contents: Read and write</code> khusus ke 1 repo data tersebut
+                saja.
               </div>
             </div>
 
@@ -283,7 +481,7 @@ export function SettingsView({
 
               <div className="form-field">
                 <label className="form-label" htmlFor="gh-token">
-                  Fine-grained Personal Access Token (disimpan lokal di browser ini)
+                  Fine-grained Personal Access Token (tersimpan lokal di browser)
                 </label>
                 <input
                   id="gh-token"
@@ -314,15 +512,14 @@ export function SettingsView({
               />
               <span>
                 <Lock size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                Enkripsi file JSON dengan <strong>AES-256 (Web Crypto)</strong> sebelum dikirim ke
-                GitHub
+                Enkripsi file JSON dengan <strong>AES-256</strong> sebelum dikirim ke GitHub
               </span>
             </label>
 
             {settings.github.encryptData && (
               <div className="form-field" style={{ maxWidth: 420 }}>
                 <label className="form-label" htmlFor="gh-passphrase">
-                  Passphrase Enkripsi (Gunakan passphrase yang sama di HP &amp; Laptop)
+                  Passphrase Enkripsi (Gunakan yang sama di HP &amp; Laptop)
                 </label>
                 <input
                   id="gh-passphrase"
@@ -340,19 +537,35 @@ export function SettingsView({
               </div>
             )}
 
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={settings.github.autoSync}
-                onChange={(e) =>
-                  onUpdateSettings({
-                    ...settings,
-                    github: { ...settings.github, autoSync: e.target.checked },
-                  })
-                }
-              />
-              <span>Otomatis push ke GitHub setiap kali data diubah</span>
-            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.github.autoPull}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      github: { ...settings.github, autoPull: e.target.checked },
+                    })
+                  }
+                />
+                <span>Auto-Pull otomatis saat membuka aplikasi / kembali ke tab</span>
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.github.autoSync}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      github: { ...settings.github, autoSync: e.target.checked },
+                    })
+                  }
+                />
+                <span>Auto-Push otomatis ke GitHub setiap kali data diubah</span>
+              </label>
+            </div>
 
             <div className="filter-bar">
               <button
@@ -378,6 +591,14 @@ export function SettingsView({
                 onClick={onPushCloud}
               >
                 <CloudUpload size={14} /> Simpan ke GitHub (Push)
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={!settings.github.token.trim()}
+                onClick={() => setQrOpen(true)}
+              >
+                <QrCode size={14} /> Hubungkan HP (QR)
               </button>
             </div>
           </div>
@@ -494,19 +715,35 @@ export function SettingsView({
               </form>
             )}
 
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={settings.supabase.autoSync}
-                onChange={(e) =>
-                  onUpdateSettings({
-                    ...settings,
-                    supabase: { ...settings.supabase, autoSync: e.target.checked },
-                  })
-                }
-              />
-              <span>Otomatis sinkron ke Supabase setiap kali data diubah</span>
-            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.supabase.autoPull}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      supabase: { ...settings.supabase, autoPull: e.target.checked },
+                    })
+                  }
+                />
+                <span>Auto-Pull otomatis saat membuka aplikasi / kembali ke tab</span>
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.supabase.autoSync}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      supabase: { ...settings.supabase, autoSync: e.target.checked },
+                    })
+                  }
+                />
+                <span>Auto-Push otomatis ke Supabase setiap kali data diubah</span>
+              </label>
+            </div>
 
             <div className="filter-bar">
               <button
@@ -534,17 +771,12 @@ export function SettingsView({
       <section className="surface-card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <h2 className="section-title">Backup &amp; Portabilitas Data (Excel &amp; JSON)</h2>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-secondary)' }}>
-          Export seluruh data ke file Excel multi-sheet (siap dibuka di Google Sheets / Microsoft
-          Excel) atau simpan backup penuh dalam format JSON agar terhindar dari risiko kehilangan
-          akses.
+          Import langsung dari file Excel/CSV atau export seluruh data ke format Excel multi-sheet
+          dan JSON untuk arsip cadangan.
         </p>
 
         <div className="filter-bar">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={onOpenImport}
-          >
+          <button type="button" className="btn btn-primary" onClick={onOpenImport}>
             <Upload size={15} /> Import Excel (.xlsx) / CSV
           </button>
 
@@ -611,6 +843,15 @@ export function SettingsView({
           </button>
         </div>
       </section>
+
+      {qrOpen && (
+        <QrPairModal
+          open
+          settings={settings}
+          onClose={() => setQrOpen(false)}
+          onCopy={onCopy}
+        />
+      )}
     </>
   );
 }
