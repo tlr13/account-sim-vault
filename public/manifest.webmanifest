@@ -1,0 +1,19 @@
+{
+  "name": "AccVault — Peta Akun Google & Kartu SIM",
+  "short_name": "AccVault",
+  "description": "Catat banyak akun Google, cloud project, website terhubung, subscription, serta masa aktif dan masa tenggang kartu SIM.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F6F5F1",
+  "theme_color": "#1E40AF",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
