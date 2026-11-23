@@ -722,6 +722,7 @@ a:hover {
   background: var(--bg-subtle);
   color: var(--ink-secondary);
   border: 1px solid var(--border-hairline);
+  white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -1262,6 +1263,109 @@ a:hover {
 .toast-banner.error {
   background: var(--danger);
   color: #ffffff;
+}
+
+/* Compact Data Table (Spreadsheet-grade scannability for 40+ accounts & SIM cards) */
+.data-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.data-table thead th {
+  padding: 11px 13px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  color: var(--ink-muted);
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-hairline);
+  white-space: nowrap;
+}
+
+.data-table tbody td {
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border-hairline);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.data-table tbody tr:hover {
+  background: var(--bg-subtle);
+}
+
+.data-table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.table-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.table-subtext {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+/* Collapsible Advanced Section in Forms (Progressive Disclosure) */
+.collapsible-section {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+
+.collapsible-section summary {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.collapsible-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-section[open] summary {
+  border-bottom: 1px solid var(--border-hairline);
+  color: var(--ink-primary);
+}
+
+.collapsible-body {
+  padding: 14px;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
 }
 
 /* Mobile Bottom Navigation */

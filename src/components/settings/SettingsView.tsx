@@ -40,6 +40,7 @@ interface SettingsViewProps {
   onPullCloud: () => Promise<void>;
   onPushCloud: () => Promise<void>;
   onImportVault: (nextVault: VaultData) => void;
+  onOpenImport: () => void;
   onLoadSampleData: () => void;
   onClearAllData: () => void;
   onToast: (text: string, tone?: 'default' | 'error') => void;
@@ -56,6 +57,7 @@ export function SettingsView({
   onPullCloud,
   onPushCloud,
   onImportVault,
+  onOpenImport,
   onLoadSampleData,
   onClearAllData,
   onToast,
@@ -541,6 +543,14 @@ export function SettingsView({
           <button
             type="button"
             className="btn btn-primary"
+            onClick={onOpenImport}
+          >
+            <Upload size={15} /> Import Excel (.xlsx) / CSV
+          </button>
+
+          <button
+            type="button"
+            className="btn"
             onClick={() => {
               void exportVaultToExcel(vault).then(() =>
                 onToast('File Excel (.xlsx) berhasil diunduh!')

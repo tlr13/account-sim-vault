@@ -29,13 +29,20 @@ describe('Global Reverse-Lookup Search Engine', () => {
 
   it('finds SIM card by last 4 digits or provider and reveals linked account context', () => {
     const byDigits = searchVault(vault, '9832');
-    expect(byDigits.some((r) => r.category === 'phone' && r.title.includes('Indosat'))).toBe(
+    expect(byDigits.some((r) => r.category === 'phone' && r.title.includes('Tri'))).toBe(
       true
     );
 
     const byProvider = searchVault(vault, 'Telkomsel', 'phone');
     expect(byProvider.length).toBe(1);
     expect(byProvider[0].copyValue).toBe('0812-8840-2190');
+  });
+
+  it('finds accounts flagged as Belum Cancel or by quick subscription name', () => {
+    const needCancel = searchVault(vault, 'belum cancel');
+    expect(needCancel.some((r) => r.ownerAccount?.email === 'rafi.clouddev@gmail.com')).toBe(
+      true
+    );
   });
 
   it('searches inside custom fields and tags', () => {

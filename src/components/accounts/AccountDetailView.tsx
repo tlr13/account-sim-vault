@@ -153,10 +153,46 @@ export function AccountDetailView({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <span className="badge badge-info">{account.primaryPurpose}</span>
           <span
-            className={`badge badge-${account.status === 'Active' ? 'success' : 'neutral'}`}
+            className={`badge badge-${
+              account.status === 'Active'
+                ? 'success'
+                : account.status === 'Issue' || account.status === 'Suspended'
+                  ? 'danger'
+                  : account.status === 'Shared'
+                    ? 'warning'
+                    : account.status === 'Spare'
+                      ? 'info'
+                      : 'neutral'
+            }`}
           >
-            {account.status}
+            {account.status === 'Spare'
+              ? 'Cadangan'
+              : account.status === 'Shared'
+                ? 'Dipakai Orang'
+                : account.status === 'Sold'
+                  ? 'Sold / Terjual'
+                  : account.status === 'Issue'
+                    ? 'Bermasalah'
+                    : account.status}
           </span>
+          {account.passwordHint && (
+            <span className="tag-chip">Hint Pass: {account.passwordHint}</span>
+          )}
+          {account.holderName && (
+            <span className="badge badge-warning">
+              {account.status === 'Sold' ? 'Pembeli' : 'Pemakai'}: {account.holderName}
+              {account.holderUntil ? ` (s/d ${account.holderUntil})` : ''}
+            </span>
+          )}
+          {account.quickSubName && (
+            <span className="badge badge-info">
+              {account.quickSubName}
+              {account.quickSubPeriod ? ` · ${account.quickSubPeriod}` : ''}
+            </span>
+          )}
+          {account.quickSubNeedsCancel && (
+            <span className="badge badge-warning">Belum Cancel</span>
+          )}
           {account.has2FA && (
             <span className="badge badge-success">
               <ShieldCheck size={12} /> 2FA Aktif

@@ -46,6 +46,12 @@ create table if not exists public.google_accounts (
   color_badge text not null default '#2563EB',
   chrome_profile text not null default '',
   status text not null default 'Active',
+  password_hint text not null default '',
+  holder_name text not null default '',
+  holder_until text not null default '',
+  quick_sub_name text not null default '',
+  quick_sub_period text not null default '',
+  quick_sub_needs_cancel boolean not null default false,
   recovery_account_id text references public.google_accounts(id) on delete set null,
   linked_phone_id text references public.phone_numbers(id) on delete set null,
   recovery_phone_hint text not null default '',
@@ -58,6 +64,14 @@ create table if not exists public.google_accounts (
   notes text not null default '',
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+-- Migrasi aman untuk database Supabase yang sudah dibuat sebelumnya
+alter table public.google_accounts add column if not exists password_hint text not null default '';
+alter table public.google_accounts add column if not exists holder_name text not null default '';
+alter table public.google_accounts add column if not exists holder_until text not null default '';
+alter table public.google_accounts add column if not exists quick_sub_name text not null default '';
+alter table public.google_accounts add column if not exists quick_sub_period text not null default '';
+alter table public.google_accounts add column if not exists quick_sub_needs_cancel boolean not null default false;
 
 -- 3. Cloud Projects per Akun Google
 create table if not exists public.cloud_projects (

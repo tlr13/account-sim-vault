@@ -204,6 +204,18 @@ export function extendSimDates(
   };
 }
 
+export function normalizePhoneNumber(rawPhone: string): string {
+  const cleaned = rawPhone.trim();
+  if (!cleaned) return '';
+  const digits = cleaned.replace(/\D/g, '');
+  if (!digits) return cleaned;
+  // Restore leading 0 when spreadsheet stripped it (e.g. 82322362446 -> 082322362446)
+  if (/^8\d{8,12}$/.test(digits) && !cleaned.startsWith('0') && !cleaned.startsWith('+')) {
+    return `0${digits}`;
+  }
+  return cleaned;
+}
+
 export function maskPhoneNumber(rawPhone: string): string {
   const trimmed = rawPhone.trim();
   if (!trimmed) return '';
@@ -216,13 +228,34 @@ export function maskPhoneNumber(rawPhone: string): string {
   return `${prefix}-••••-${suffix}`;
 }
 
+export function formatDaysCountdown(
+  isoDate: string,
+  referenceDate: Date = new Date()
+): { days: number | null; text: string; tone: 'success' | 'warning' | 'danger' | 'neutral' } {
+  const days = diffDaysFromToday(isoDate, referenceDate);
+  if (days === null) {
+    return { days: null, text: '—', tone: 'neutral' };
+  }
+  if (days < 0) {
+    return { days, text: `Lewat ${Math.abs(days)}h`, tone: 'danger' };
+  }
+  if (days === 0) {
+    return { days: 0, text: 'Hari ini!', tone: 'danger' };
+  }
+  if (days <= 14) {
+    return { days, text: `${days}h lagi`, tone: 'warning' };
+  }
+  return { days, text: `${days}h lagi`, tone: 'success' };
+}
+
 export function getProviderAccent(provider: string): string {
   const key = provider.toLowerCase();
-  if (key.includes('telkomsel')) return '#DC2626';
+  if (key.includes('telkom')) return '#DC2626';
   if (key.includes('by.u') || key.includes('byu')) return '#EA580C';
   if (key.includes('indosat') || key.includes('im3')) return '#D97706';
+  if (key.includes('xl prio')) return '#0F766E';
   if (key.includes('xl')) return '#1D4ED8';
-  if (key.includes('axis')) return '#0F766E';
+  if (key.includes('axis')) return '#0D9488';
   if (key.includes('tri') || key.includes('(3)')) return '#0284C7';
   if (key.includes('smartfren')) return '#BE123C';
   return '#475569';

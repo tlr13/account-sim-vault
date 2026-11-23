@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccountDetailView } from './components/accounts/AccountDetailView';
 import { AccountFormModal } from './components/accounts/AccountFormModal';
 import { AccountsView } from './components/accounts/AccountsView';
+import { ImportSpreadsheetModal } from './components/common/ImportSpreadsheetModal';
 import { Toast, type ToastMessage } from './components/common/Toast';
 import { DashboardView } from './components/dashboard/DashboardView';
 import {
@@ -67,6 +68,10 @@ import {
   type VaultData,
 } from './types/models';
 import {
+  mergeImportedSpreadsheet,
+  type SpreadsheetImportSummary,
+} from './utils/backupIO';
+import {
   downloadTextFile,
   generateSimReminderIcs,
   generateSubscriptionReminderIcs,
@@ -84,6 +89,7 @@ export default function App() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -296,7 +302,40 @@ export default function App() {
     [vault.subscriptions]
   );
 
-  const totalAlerts = urgentSimCount + urgentSubCount;
+  const urgentCancelCount = useMemo(
+    () => vault.googleAccounts.filter((a) => a.quickSubNeedsCancel).length,
+    [vault.googleAccounts]
+  );
+
+  const totalAlerts = urgentSimCount + urgentSubCount + urgentCancelCount;
+
+  const toggleNeedsCancel = (account: GoogleAccount) => {
+    const nextVal = !account.quickSubNeedsCancel;
+    commitVault((prev) => ({
+      ...prev,
+      googleAccounts: prev.googleAccounts.map((a) =>
+        a.id === account.id
+          ? { ...a, quickSubNeedsCancel: nextVal, updatedAt: new Date().toISOString() }
+          : a
+      ),
+    }));
+    showToast(
+      nextVal
+        ? `${account.email} ditandai Belum Cancel.`
+        : `${account.email} ditandai Sudah Cancel!`
+    );
+  };
+
+  const handleSpreadsheetImport = (
+    summary: SpreadsheetImportSummary,
+    mode: 'merge' | 'replace'
+  ) => {
+    commitVault((prev) => mergeImportedSpreadsheet(prev, summary, mode));
+    setSelectedAccountId(null);
+    showToast(
+      `Import berhasil: ${summary.accounts.length} akun email & ${summary.phones.length} nomor HP.`
+    );
+  };
 
   const selectedAccount = useMemo(
     () => vault.googleAccounts.find((a) => a.id === selectedAccountId) ?? null,
@@ -699,9 +738,11 @@ export default function App() {
               onNavigateTab={navigateTab}
               onOpenAccount={openAccountDetail}
               onOpenSearch={() => setSearchOpen(true)}
+              onOpenImport={() => setImportOpen(true)}
               onQuickAdd={(kind) => handleQuickAdd(kind)}
               onQuickExtendPhone={(phone) => setExtendingPhone(phone)}
               onDownloadSimIcs={downloadSimIcs}
+              onMarkAccountCancelled={toggleNeedsCancel}
               onCopy={handleCopy}
             />
           )}
@@ -755,6 +796,8 @@ export default function App() {
                 onOpenAccount={openAccountDetail}
                 onAddAccount={() => setAccountModal({ open: true, editing: null })}
                 onEditAccount={(acc) => setAccountModal({ open: true, editing: acc })}
+                onToggleNeedsCancel={toggleNeedsCancel}
+                onOpenImport={() => setImportOpen(true)}
                 onCopy={handleCopy}
               />
             ))}
@@ -769,6 +812,7 @@ export default function App() {
               onExtendPhone={(p) => setExtendingPhone(p)}
               onDownloadIcs={downloadSimIcs}
               onOpenAccount={openAccountDetail}
+              onOpenImport={() => setImportOpen(true)}
               onCopy={handleCopy}
             />
           )}
@@ -825,6 +869,7 @@ export default function App() {
               onPullCloud={pullFromActiveCloud}
               onPushCloud={() => pushToActiveCloud(vault, settings, false)}
               onImportVault={(imported) => commitVault(() => imported)}
+              onOpenImport={() => setImportOpen(true)}
               onLoadSampleData={() => {
                 if (
                   window.confirm(
@@ -907,6 +952,14 @@ export default function App() {
         onCopy={handleCopy}
         onSelectResult={handleSelectSearchResult}
       />
+
+      {importOpen && (
+        <ImportSpreadsheetModal
+          open
+          onClose={() => setImportOpen(false)}
+          onConfirmImport={handleSpreadsheetImport}
+        />
+      )}
 
       {accountModal.open && (
         <AccountFormModal

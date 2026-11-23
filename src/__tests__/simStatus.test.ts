@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { PhoneNumber, Subscription } from '../types/models';
 import {
   extendSimDates,
+  formatDaysCountdown,
   getSimHealth,
   getSubscriptionHealth,
   maskPhoneNumber,
+  normalizePhoneNumber,
   summarizeSubscriptionCosts,
 } from '../utils/simStatus';
 
@@ -103,9 +105,13 @@ describe('simStatus utilities', () => {
     expect(graceExt.graceUntil).toBe('2027-01-22');
   });
 
-  it('masks middle digits of phone numbers for privacy mode', () => {
+  it('masks middle digits of phone numbers and restores leading 0 stripped by Excel', () => {
     expect(maskPhoneNumber('0812-8840-2190')).toBe('0812-••••-2190');
     expect(maskPhoneNumber('085744109832')).toBe('0857-••••-9832');
+    expect(normalizePhoneNumber('82322362446')).toBe('082322362446');
+    expect(normalizePhoneNumber('0812-8840-2190')).toBe('0812-8840-2190');
+    expect(formatDaysCountdown('', refDate).text).toBe('—');
+    expect(formatDaysCountdown('2026-12-13', refDate).days).toBe(20);
   });
 
   it('summarizes active subscriptions grouped by currency and detects upcoming renewals', () => {

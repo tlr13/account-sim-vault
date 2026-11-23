@@ -50,14 +50,26 @@ export function buildSearchEntries(
 
   for (const acc of vault.googleAccounts) {
     const linkedPhone = phoneMap.get(acc.linkedPhoneId);
+    const statusLabel =
+      acc.status === 'Spare'
+        ? 'Cadangan'
+        : acc.status === 'Shared'
+          ? 'Dipakai Orang'
+          : acc.status === 'Sold'
+            ? 'Sold'
+            : acc.status === 'Issue'
+              ? 'Bermasalah'
+              : acc.status;
     entries.push({
       id: acc.id,
       category: 'account',
       title: acc.aliasLabel || acc.email,
       subtitle: acc.email,
       detailLine: [
-        acc.primaryPurpose,
-        acc.chromeProfile,
+        acc.quickSubName
+          ? `${acc.quickSubName}${acc.quickSubNeedsCancel ? ' (Belum Cancel)' : ''}`
+          : acc.primaryPurpose,
+        acc.holderName ? `Pemakai: ${acc.holderName}` : '',
         linkedPhone ? `SIM: ${linkedPhone.provider}` : '',
       ]
         .filter(Boolean)
@@ -67,13 +79,30 @@ export function buildSearchEntries(
       ownerEmailText: acc.email,
       copyValue: acc.email,
       copyLabel: 'Salin Email',
-      badgeText: acc.status,
-      badgeTone: acc.status === 'Active' ? 'success' : 'neutral',
+      badgeText: acc.quickSubNeedsCancel ? 'Belum Cancel' : statusLabel,
+      badgeTone: acc.quickSubNeedsCancel
+        ? 'warning'
+        : acc.status === 'Active'
+          ? 'success'
+          : acc.status === 'Issue' || acc.status === 'Suspended'
+            ? 'danger'
+            : acc.status === 'Shared'
+              ? 'warning'
+              : acc.status === 'Spare'
+                ? 'info'
+                : 'neutral',
       keywords: [
         acc.email,
         acc.aliasLabel,
         acc.primaryPurpose,
         acc.chromeProfile,
+        acc.passwordHint,
+        acc.holderName,
+        acc.holderUntil,
+        acc.quickSubName,
+        acc.quickSubPeriod,
+        acc.quickSubNeedsCancel ? 'belum cancel' : '',
+        statusLabel,
         acc.passwordManagerRef,
         linkedPhone?.phoneNumber ?? '',
         linkedPhone?.provider ?? '',

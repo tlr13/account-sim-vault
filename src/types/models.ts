@@ -3,7 +3,15 @@ export interface CustomField {
   value: string;
 }
 
-export type AccountStatus = 'Active' | 'Rarely Used' | 'Suspended' | 'Archived';
+export type AccountStatus =
+  | 'Active'
+  | 'Spare'
+  | 'Shared'
+  | 'Sold'
+  | 'Issue'
+  | 'Rarely Used'
+  | 'Suspended'
+  | 'Archived';
 
 export type SimType = 'SIM Fisik' | 'eSIM';
 export type SimManualStatus = 'Active' | 'Suspended' | 'Archived';
@@ -25,8 +33,8 @@ export interface PhoneNumber {
   deviceSlot: string;
   usagePurpose: string;
   noExpiry: boolean;
-  activeUntil: string; // YYYY-MM-DD or ''
-  graceUntil: string; // YYYY-MM-DD or ''
+  activeUntil: string; // Tanggal masuk masa tenggang / akhir masa aktif (YYYY-MM-DD)
+  graceUntil: string; // Tanggal mati / hangus permanen (YYYY-MM-DD)
   renewalTip: string;
   linkedServices: string[];
   manualStatus: SimManualStatus;
@@ -44,6 +52,12 @@ export interface GoogleAccount {
   colorBadge: string;
   chromeProfile: string;
   status: AccountStatus;
+  passwordHint: string; // Kode pola / hint aman (bukan password mentah)
+  holderName: string; // Nama pemakai / pembeli jika Shared atau Sold
+  holderUntil: string; // Batas waktu pakai (mis. Juni 2027)
+  quickSubName: string; // Paket langganan ringkas (mis. Google AI Pro, YouTube Premium)
+  quickSubPeriod: string; // Periode/batas (mis. Nov 2026 - Nov 2027)
+  quickSubNeedsCancel: boolean; // Penanda "Belum Cancel"
   recoveryAccountId: string; // '' if none
   linkedPhoneId: string; // '' if none
   recoveryPhoneHint: string;
@@ -194,6 +208,21 @@ export interface GlobalSearchResult {
 
 export type ActiveTab = 'dashboard' | 'accounts' | 'phones' | 'items' | 'settings';
 export type ItemsSubTab = 'cloud' | 'websites' | 'subscriptions' | 'other';
+export type ViewMode = 'table' | 'cards';
+
+export const ACCOUNT_STATUS_META: Record<
+  AccountStatus,
+  { label: string; shortLabel: string; tone: 'success' | 'info' | 'warning' | 'danger' | 'neutral' }
+> = {
+  Active: { label: 'Aktif (Pribadi)', shortLabel: 'Aktif', tone: 'success' },
+  Spare: { label: 'Cadangan (Kosong)', shortLabel: 'Cadangan', tone: 'info' },
+  Shared: { label: 'Dipakai Orang', shortLabel: 'Dipakai Orang', tone: 'warning' },
+  Sold: { label: 'Sold / Terjual', shortLabel: 'Sold', tone: 'neutral' },
+  Issue: { label: 'Bermasalah / Banned', shortLabel: 'Bermasalah', tone: 'danger' },
+  'Rarely Used': { label: 'Jarang Dipakai', shortLabel: 'Jarang', tone: 'neutral' },
+  Suspended: { label: 'Suspended', shortLabel: 'Suspended', tone: 'danger' },
+  Archived: { label: 'Arsip', shortLabel: 'Arsip', tone: 'neutral' },
+};
 
 export const ACCOUNT_COLOR_PALETTE = [
   { label: 'Cobalt', hex: '#2563EB' },
@@ -208,10 +237,11 @@ export const ACCOUNT_COLOR_PALETTE = [
 
 export const SIM_PROVIDERS = [
   'Telkomsel',
-  'by.U',
-  'Indosat / IM3',
   'Tri (3)',
   'XL',
+  'XL Prio',
+  'Indosat / IM3',
+  'by.U',
   'Axis',
   'Smartfren',
   'Lainnya',
@@ -261,6 +291,7 @@ export const ACCOUNT_PURPOSES = [
   'Developer & Cloud',
   'Side Project & AI',
   'Subscription & Hiburan',
+  'Cadangan / Akun Serial',
   'Belanja & Sosmed',
   'Backup & Arsip',
   'Lainnya',
@@ -290,4 +321,33 @@ export function parseTagsInput(raw: string): string[] {
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean);
+}
+
+export function normalizeAccountRecord(raw: Partial<GoogleAccount>): GoogleAccount {
+  return {
+    id: raw.id || generateId('acc'),
+    email: raw.email ?? '',
+    aliasLabel: raw.aliasLabel ?? '',
+    primaryPurpose: raw.primaryPurpose ?? 'Personal Utama',
+    colorBadge: raw.colorBadge ?? '#2563EB',
+    chromeProfile: raw.chromeProfile ?? '',
+    status: raw.status ?? 'Active',
+    passwordHint: raw.passwordHint ?? '',
+    holderName: raw.holderName ?? '',
+    holderUntil: raw.holderUntil ?? '',
+    quickSubName: raw.quickSubName ?? '',
+    quickSubPeriod: raw.quickSubPeriod ?? '',
+    quickSubNeedsCancel: Boolean(raw.quickSubNeedsCancel),
+    recoveryAccountId: raw.recoveryAccountId ?? '',
+    linkedPhoneId: raw.linkedPhoneId ?? '',
+    recoveryPhoneHint: raw.recoveryPhoneHint ?? '',
+    has2FA: Boolean(raw.has2FA),
+    passwordManagerRef: raw.passwordManagerRef ?? '',
+    driveUsedGb: raw.driveUsedGb ?? null,
+    driveLimitGb: raw.driveLimitGb ?? null,
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    customFields: Array.isArray(raw.customFields) ? raw.customFields : [],
+    notes: raw.notes ?? '',
+    updatedAt: raw.updatedAt ?? new Date().toISOString(),
+  };
 }

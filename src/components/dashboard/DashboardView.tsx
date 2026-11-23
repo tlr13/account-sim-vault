@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   CalendarPlus,
+  CheckCircle2,
   Cloud,
   Copy,
   CreditCard,
@@ -11,14 +12,16 @@ import {
   RefreshCw,
   Search,
   Smartphone,
+  Upload,
 } from 'lucide-react';
 import { useMemo } from 'react';
-import type {
-  ActiveTab,
-  GoogleAccount,
-  ItemsSubTab,
-  PhoneNumber,
-  VaultData,
+import {
+  ACCOUNT_STATUS_META,
+  type ActiveTab,
+  type GoogleAccount,
+  type ItemsSubTab,
+  type PhoneNumber,
+  type VaultData,
 } from '../../types/models';
 import {
   formatCurrency,
@@ -36,11 +39,13 @@ interface DashboardViewProps {
   onNavigateTab: (tab: ActiveTab, itemsSub?: ItemsSubTab) => void;
   onOpenAccount: (accountId: string) => void;
   onOpenSearch: () => void;
+  onOpenImport: () => void;
   onQuickAdd: (
     kind: 'account' | 'phone' | 'cloud' | 'website' | 'subscription' | 'other'
   ) => void;
   onQuickExtendPhone: (phone: PhoneNumber) => void;
   onDownloadSimIcs: (phone: PhoneNumber) => void;
+  onMarkAccountCancelled: (account: GoogleAccount) => void;
   onCopy: (text: string, label: string) => void;
 }
 
@@ -50,9 +55,11 @@ export function DashboardView({
   onNavigateTab,
   onOpenAccount,
   onOpenSearch,
+  onOpenImport,
   onQuickAdd,
   onQuickExtendPhone,
   onDownloadSimIcs,
+  onMarkAccountCancelled,
   onCopy,
 }: DashboardViewProps) {
   const accountById = useMemo(
@@ -70,6 +77,11 @@ export function DashboardView({
       .filter((item) => item.health.needsAttention)
       .sort((a, b) => a.health.urgencyRank - b.health.urgencyRank);
   }, [vault.phoneNumbers, vault.googleAccounts]);
+
+  const accountsNeedingCancel = useMemo(
+    () => vault.googleAccounts.filter((a) => a.quickSubNeedsCancel),
+    [vault.googleAccounts]
+  );
 
   const upcomingSubs = useMemo(() => {
     return vault.subscriptions
@@ -93,7 +105,8 @@ export function DashboardView({
   const hasCriticalAlert = urgentPhones.some(
     (p) => p.health.state === 'grace_period' || p.health.state === 'expired'
   );
-  const totalAlerts = urgentPhones.length + upcomingSubs.length;
+  const totalAlerts =
+    urgentPhones.length + accountsNeedingCancel.length + upcomingSubs.length;
 
   return (
     <>
@@ -101,10 +114,13 @@ export function DashboardView({
         <div>
           <h1 className="page-title">Ringkasan Identitas &amp; Aset</h1>
           <p className="page-subtitle">
-            Cari cepat akun Google pemilik website/project, dan pantau masa aktif kartu SIM.
+            Cari cepat akun Google, pantau status Belum Cancel, dan jaga masa aktif kartu SIM.
           </p>
         </div>
         <div className="filter-bar">
+          <button type="button" className="btn" onClick={onOpenImport}>
+            <Upload size={15} /> Import Excel
+          </button>
           <button type="button" className="btn" onClick={onOpenSearch}>
             <Search size={15} /> Cari Cepat
           </button>
@@ -125,10 +141,12 @@ export function DashboardView({
           className="kpi-tile"
           onClick={() => onNavigateTab('accounts')}
         >
-          <span className="kpi-label">Akun Google</span>
+          <span className="kpi-label">Akun Email</span>
           <span className="kpi-value">{vault.googleAccounts.length}</span>
           <span className="kpi-meta">
-            {vault.googleAccounts.filter((a) => a.status === 'Active').length} aktif
+            {accountsNeedingCancel.length > 0
+              ? `${accountsNeedingCancel.length} belum cancel · ${vault.googleAccounts.filter((a) => a.status === 'Spare').length} cadangan`
+              : `${vault.googleAccounts.filter((a) => a.status === 'Active').length} aktif pribadi`}
           </span>
         </button>
 
@@ -180,7 +198,7 @@ export function DashboardView({
           <span className="kpi-meta">
             {costSummary.length > 1
               ? `+ ${formatCurrency(costSummary[1].monthlyTotal, costSummary[1].currency)}/bln`
-              : `${vault.subscriptions.filter((s) => s.status === 'Active' || s.status === 'Trial').length} langganan aktif`}
+              : `${vault.subscriptions.filter((s) => s.status === 'Active' || s.status === 'Trial').length} tagihan tercatat`}
           </span>
         </button>
       </section>
@@ -200,7 +218,7 @@ export function DashboardView({
               <span>Perlu Perhatian Segera ({totalAlerts})</span>
             </div>
             <span style={{ fontSize: 12, color: 'var(--ink-secondary)' }}>
-              Kartu SIM ≤14 hari / tenggang &amp; tagihan mendatang
+              Kartu SIM tenggang/hampir habis, akun Belum Cancel, &amp; tagihan
             </span>
           </div>
 
@@ -238,20 +256,15 @@ export function DashboardView({
                       {linkedAccounts.length > 0 ? (
                         <>
                           Tertaut ke{' '}
-                          <strong>{linkedAccounts.length} Akun Google</strong>:{' '}
+                          <strong>{linkedAccounts.length} Akun Email</strong>:{' '}
                           <span className="mono">
                             {linkedAccounts.map((a) => a.email).join(', ')}
                           </span>
                         </>
                       ) : (
-                        phone.label || phone.usagePurpose || 'Kartu SIM tanpa tautan akun Google'
+                        phone.label || phone.usagePurpose || 'Kartu SIM tanpa tautan akun email'
                       )}
                     </div>
-                    {phone.renewalTip && (
-                      <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
-                        Tips: {phone.renewalTip}
-                      </div>
-                    )}
                   </div>
 
                   <div className="alert-actions">
@@ -274,6 +287,59 @@ export function DashboardView({
                 </div>
               );
             })}
+
+            {accountsNeedingCancel.map((acc) => (
+              <div key={`cancel-${acc.id}`} className="alert-row">
+                <div className="alert-info">
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <span className="badge badge-warning">Belum Cancel</span>
+                    <strong>{acc.quickSubName || 'Subscription Aktif'}</strong>
+                    {acc.quickSubPeriod && (
+                      <span className="mono" style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
+                        ({acc.quickSubPeriod})
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 12.5,
+                      color: 'var(--ink-secondary)',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="account-pill"
+                      onClick={() => onOpenAccount(acc.id)}
+                    >
+                      <span className="color-dot" style={{ background: acc.colorBadge }} />
+                      <span className="mono">{acc.email}</span>
+                    </button>
+                    {acc.holderName && <span>· Pemakai: {acc.holderName}</span>}
+                  </div>
+                </div>
+
+                <div className="alert-actions">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => onMarkAccountCancelled(acc)}
+                  >
+                    <CheckCircle2 size={13} /> Tandai Sudah Cancel
+                  </button>
+                </div>
+              </div>
+            ))}
 
             {upcomingSubs.map(({ sub, health, owner }) => (
               <div key={sub.id} className="alert-row">
@@ -320,7 +386,6 @@ export function DashboardView({
                       </button>
                     )}
                     <span>Jatuh tempo: {formatDateID(sub.nextRenewalDate)}</span>
-                    {sub.paymentMethodHint && <span>· {sub.paymentMethodHint}</span>}
                   </div>
                 </div>
                 <div className="alert-actions">
@@ -348,10 +413,10 @@ export function DashboardView({
         </div>
         <div className="filter-bar">
           <button type="button" className="btn btn-sm" onClick={() => onQuickAdd('account')}>
-            <Mail size={14} /> + Akun Google
+            <Mail size={14} /> + Akun Email
           </button>
           <button type="button" className="btn btn-sm" onClick={() => onQuickAdd('phone')}>
-            <Smartphone size={14} /> + Kartu SIM / Nomor HP
+            <Smartphone size={14} /> + Nomor HP / SIM
           </button>
           <button type="button" className="btn btn-sm" onClick={() => onQuickAdd('cloud')}>
             <Cloud size={14} /> + Cloud Project
@@ -372,24 +437,24 @@ export function DashboardView({
         </div>
       </section>
 
-      {/* Two-Column Overview: Accounts & SIM Cards */}
+      {/* Two-Column Overview */}
       <div className="card-grid-2">
         <section className="surface-card">
           <div className="section-header">
             <h2 className="section-title">
-              <Mail size={16} /> Akun Google ({vault.googleAccounts.length})
+              <Mail size={16} /> Akun Email ({vault.googleAccounts.length})
             </h2>
             <button
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() => onNavigateTab('accounts')}
             >
-              Semua
+              Lihat Tabel
             </button>
           </div>
           {vault.googleAccounts.length === 0 ? (
             <div className="empty-state" style={{ padding: 24 }}>
-              <div>Belum ada akun Google dicatat.</div>
+              <div>Belum ada akun email dicatat.</div>
               <button
                 type="button"
                 className="btn btn-sm btn-primary"
@@ -401,16 +466,7 @@ export function DashboardView({
           ) : (
             <div className="item-list">
               {vault.googleAccounts.slice(0, 5).map((acc) => {
-                const cloudCount = vault.cloudProjects.filter(
-                  (c) => c.accountId === acc.id
-                ).length;
-                const webCount = vault.connectedWebsites.filter(
-                  (w) => w.accountId === acc.id
-                ).length;
-                const subCount = vault.subscriptions.filter(
-                  (s) => s.accountId === acc.id
-                ).length;
-
+                const statusMeta = ACCOUNT_STATUS_META[acc.status] ?? ACCOUNT_STATUS_META.Active;
                 return (
                   <div
                     key={acc.id}
@@ -424,14 +480,22 @@ export function DashboardView({
                           className="color-dot"
                           style={{ background: acc.colorBadge }}
                         />
-                        <span className="item-title">{acc.aliasLabel || acc.email}</span>
-                        <span className="badge badge-neutral">{acc.primaryPurpose}</span>
+                        <span className="item-title mono" style={{ fontSize: 13 }}>
+                          {acc.email}
+                        </span>
+                        <span className={`badge badge-${statusMeta.tone}`}>
+                          {statusMeta.shortLabel}
+                        </span>
+                        {acc.quickSubNeedsCancel && (
+                          <span className="badge badge-warning">Belum Cancel</span>
+                        )}
                       </div>
                       <div className="item-meta-line">
-                        <span className="mono">{acc.email}</span>
-                        <span>
-                          · {cloudCount} cloud · {webCount} web · {subCount} sub
-                        </span>
+                        {acc.quickSubName && <span>{acc.quickSubName}</span>}
+                        {acc.holderName && <span>· {acc.holderName}</span>}
+                        {acc.passwordHint && (
+                          <span className="mono">· Pass: {acc.passwordHint}</span>
+                        )}
                       </div>
                     </div>
                     <button
@@ -462,12 +526,12 @@ export function DashboardView({
               className="btn btn-ghost btn-sm"
               onClick={() => onNavigateTab('phones')}
             >
-              Kelola SIM
+              Lihat Tabel
             </button>
           </div>
           {vault.phoneNumbers.length === 0 ? (
             <div className="empty-state" style={{ padding: 24 }}>
-              <div>Belum ada kartu SIM / nomor HP dicatat.</div>
+              <div>Belum ada nomor HP dicatat.</div>
               <button
                 type="button"
                 className="btn btn-sm btn-primary"
@@ -509,9 +573,15 @@ export function DashboardView({
                         <span className="badge badge-neutral">{phone.provider}</span>
                       </div>
                       <div className="item-meta-line">
-                        <span>{phone.deviceSlot || phone.simType}</span>
-                        {!phone.noExpiry && phone.activeUntil && (
-                          <span>· Aktif s/d {formatDateID(phone.activeUntil)}</span>
+                        {phone.noExpiry ? (
+                          <span>Pascabayar / Tanpa masa tenggang</span>
+                        ) : (
+                          <>
+                            <span>Tenggang: {formatDateID(phone.activeUntil)}</span>
+                            {phone.graceUntil && (
+                              <span>· Mati: {formatDateID(phone.graceUntil)}</span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

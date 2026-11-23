@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import {
   generateId,
@@ -8,7 +9,7 @@ import {
   type SimManualStatus,
   type SimType,
 } from '../../types/models';
-import { addDaysToIso } from '../../utils/simStatus';
+import { addDaysToIso, normalizePhoneNumber } from '../../utils/simStatus';
 import { CustomFieldsEditor } from '../common/CustomFieldsEditor';
 import { Modal } from '../common/Modal';
 
@@ -20,15 +21,17 @@ interface PhoneFormModalProps {
 }
 
 export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModalProps) {
-  const [phoneNumber, setPhoneNumber] = useState(() => initial?.phoneNumber ?? '');
-  const [label, setLabel] = useState(() => initial?.label ?? '');
   const [provider, setProvider] = useState<string>(() => initial?.provider ?? SIM_PROVIDERS[0]);
-  const [simType, setSimType] = useState<SimType>(() => initial?.simType ?? 'SIM Fisik');
-  const [deviceSlot, setDeviceSlot] = useState(() => initial?.deviceSlot ?? '');
-  const [usagePurpose, setUsagePurpose] = useState(() => initial?.usagePurpose ?? '');
+  const [phoneNumber, setPhoneNumber] = useState(() => initial?.phoneNumber ?? '');
   const [noExpiry, setNoExpiry] = useState(() => initial?.noExpiry ?? false);
   const [activeUntil, setActiveUntil] = useState(() => initial?.activeUntil ?? '');
   const [graceUntil, setGraceUntil] = useState(() => initial?.graceUntil ?? '');
+
+  // Optional / Advanced details (collapsed by default)
+  const [label, setLabel] = useState(() => initial?.label ?? '');
+  const [simType, setSimType] = useState<SimType>(() => initial?.simType ?? 'SIM Fisik');
+  const [deviceSlot, setDeviceSlot] = useState(() => initial?.deviceSlot ?? '');
+  const [usagePurpose, setUsagePurpose] = useState(() => initial?.usagePurpose ?? '');
   const [renewalTip, setRenewalTip] = useState(() => initial?.renewalTip ?? '');
   const [linkedServicesText, setLinkedServicesText] = useState(
     () => initial?.linkedServices.join(', ') ?? ''
@@ -51,11 +54,12 @@ export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModa
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber.trim()) return;
+    const normalized = normalizePhoneNumber(phoneNumber);
+    if (!normalized) return;
 
     const record: PhoneNumber = {
       id: initial?.id ?? generateId('sim'),
-      phoneNumber: phoneNumber.trim(),
+      phoneNumber: normalized,
       label: label.trim(),
       provider,
       simType,
@@ -80,16 +84,15 @@ export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModa
   return (
     <Modal
       open={open}
-      title={initial ? 'Edit Kartu SIM / Nomor HP' : 'Tambah Nomor HP & Kartu SIM'}
+      title={initial ? 'Edit Kartu SIM / Nomor HP' : 'Tambah Nomor HP Cepat'}
       onClose={onClose}
-      wide
       footer={
         <>
           <button type="button" className="btn" onClick={onClose}>
             Batal
           </button>
           <button type="submit" form="phone-form" className="btn btn-primary">
-            Simpan Kartu SIM
+            Simpan Nomor HP
           </button>
         </>
       }
@@ -99,7 +102,32 @@ export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModa
         onSubmit={handleSubmit}
         style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
       >
+        {/* 4 Field Inti — Seringkas Tab "nomor" */}
         <div className="form-grid-2">
+          <div className="form-field">
+            <label className="form-label" htmlFor="sim-provider">
+              Kartu / Provider *
+            </label>
+            <select
+              id="sim-provider"
+              className="form-select"
+              value={provider}
+              onChange={(e) => {
+                const next = e.target.value;
+                setProvider(next);
+                if ((next === 'XL Prio' || next === 'by.U') && !initial) {
+                  setNoExpiry(true);
+                }
+              }}
+            >
+              {SIM_PROVIDERS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="form-field">
             <label className="form-label" htmlFor="sim-number">
               Nomor HP *
@@ -113,101 +141,7 @@ export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModa
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
             />
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="sim-label">
-              Label / Nama Panggilan
-            </label>
-            <input
-              id="sim-label"
-              type="text"
-              className="form-input"
-              placeholder="mis. Utama Harian, Khusus OTP Cloud"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="form-grid-2">
-          <div className="form-field">
-            <label className="form-label" htmlFor="sim-provider">
-              Provider Seluler
-            </label>
-            <select
-              id="sim-provider"
-              className="form-select"
-              value={provider}
-              onChange={(e) => {
-                const next = e.target.value;
-                setProvider(next);
-                if (next === 'by.U' && !initial) setNoExpiry(true);
-              }}
-            >
-              {SIM_PROVIDERS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="sim-type">
-              Jenis Kartu &amp; Status
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <select
-                id="sim-type"
-                className="form-select"
-                value={simType}
-                onChange={(e) => setSimType(e.target.value as SimType)}
-              >
-                <option value="SIM Fisik">SIM Fisik</option>
-                <option value="eSIM">eSIM</option>
-              </select>
-              <select
-                aria-label="Status manual kartu"
-                className="form-select"
-                value={manualStatus}
-                onChange={(e) => setManualStatus(e.target.value as SimManualStatus)}
-              >
-                <option value="Active">Aktif</option>
-                <option value="Suspended">Nonaktif Sementara</option>
-                <option value="Archived">Arsip / Hangus</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="form-grid-2">
-          <div className="form-field">
-            <label className="form-label" htmlFor="sim-slot">
-              Lokasi Perangkat / Slot SIM
-            </label>
-            <input
-              id="sim-slot"
-              type="text"
-              className="form-input"
-              placeholder="mis. HP Utama — SIM 1, HP Cadangan — SIM 2"
-              value={deviceSlot}
-              onChange={(e) => setDeviceSlot(e.target.value)}
-            />
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="sim-usage">
-              Kegunaan Utama
-            </label>
-            <input
-              id="sim-usage"
-              type="text"
-              className="form-input"
-              placeholder="mis. WhatsApp utama, Banking, OTP Akun Dev"
-              value={usagePurpose}
-              onChange={(e) => setUsagePurpose(e.target.value)}
-            />
+            <span className="form-help">Angka 0 di depan dijaga otomatis.</span>
           </div>
         </div>
 
@@ -217,14 +151,14 @@ export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModa
             checked={noExpiry}
             onChange={(e) => setNoExpiry(e.target.checked)}
           />
-          <span>Kartu tanpa masa aktif tetap (contoh: by.U / pascabayar)</span>
+          <span>Pascabayar / Tanpa masa tenggang (contoh: XL Prio, by.U)</span>
         </label>
 
         {!noExpiry && (
           <div className="form-grid-2">
             <div className="form-field">
               <label className="form-label" htmlFor="sim-active-until">
-                Akhir Masa Aktif
+                Tanggal Masa Tenggang (Akhir Aktif)
               </label>
               <input
                 id="sim-active-until"
@@ -244,7 +178,7 @@ export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModa
                 }}
               >
                 <label className="form-label" htmlFor="sim-grace-until">
-                  Akhir Masa Tenggang (Batas Hangus)
+                  Tanggal Mati (Hangus)
                 </label>
                 {activeUntil && (
                   <button
@@ -253,7 +187,7 @@ export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModa
                     style={{ height: 22, padding: '0 6px', fontSize: 11 }}
                     onClick={() => setGraceUntil(addDaysToIso(activeUntil, 30))}
                   >
-                    +30h dari aktif
+                    +30h
                   </button>
                 )}
               </div>
@@ -268,64 +202,146 @@ export function PhoneFormModal({ open, initial, onClose, onSave }: PhoneFormModa
           </div>
         )}
 
-        <div className="form-field">
-          <label className="form-label" htmlFor="sim-renewal-tip">
-            Catatan Cara Perpanjangan Termurah / Tercepat
-          </label>
-          <input
-            id="sim-renewal-tip"
-            type="text"
-            className="form-input"
-            placeholder="mis. Beli paket Masa Aktif 90 hari di MyTelkomsel atau isi pulsa Rp5.000"
-            value={renewalTip}
-            onChange={(e) => setRenewalTip(e.target.value)}
-          />
-        </div>
+        {/* Opsi Lanjutan — Dilipat Rapi */}
+        <details className="collapsible-section">
+          <summary>
+            <span>Opsi Lanjutan (Label, Slot HP, Tips Perpanjangan, Layanan &amp; Catatan)</span>
+            <ChevronDown size={15} />
+          </summary>
+          <div className="collapsible-body">
+            <div className="form-grid-2">
+              <div className="form-field">
+                <label className="form-label" htmlFor="sim-label">
+                  Label / Panggilan
+                </label>
+                <input
+                  id="sim-label"
+                  type="text"
+                  className="form-input"
+                  placeholder="mis. Utama, OTP Cloud"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                />
+              </div>
 
-        <div className="form-grid-2">
-          <div className="form-field">
-            <label className="form-label" htmlFor="sim-services">
-              Layanan Non-Google Tertaut (pisahkan koma)
-            </label>
-            <input
-              id="sim-services"
-              type="text"
-              className="form-input"
-              placeholder="WhatsApp, BCA Mobile, GoPay, Telegram"
-              value={linkedServicesText}
-              onChange={(e) => setLinkedServicesText(e.target.value)}
-            />
+              <div className="form-field">
+                <label className="form-label" htmlFor="sim-type">
+                  Jenis SIM &amp; Status
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <select
+                    id="sim-type"
+                    className="form-select"
+                    value={simType}
+                    onChange={(e) => setSimType(e.target.value as SimType)}
+                  >
+                    <option value="SIM Fisik">SIM Fisik</option>
+                    <option value="eSIM">eSIM</option>
+                  </select>
+                  <select
+                    aria-label="Status manual kartu"
+                    className="form-select"
+                    value={manualStatus}
+                    onChange={(e) => setManualStatus(e.target.value as SimManualStatus)}
+                  >
+                    <option value="Active">Aktif</option>
+                    <option value="Suspended">Nonaktif</option>
+                    <option value="Archived">Arsip</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-grid-2">
+              <div className="form-field">
+                <label className="form-label" htmlFor="sim-slot">
+                  Lokasi HP / Slot SIM
+                </label>
+                <input
+                  id="sim-slot"
+                  type="text"
+                  className="form-input"
+                  placeholder="mis. HP Utama — SIM 1"
+                  value={deviceSlot}
+                  onChange={(e) => setDeviceSlot(e.target.value)}
+                />
+              </div>
+
+              <div className="form-field">
+                <label className="form-label" htmlFor="sim-usage">
+                  Kegunaan
+                </label>
+                <input
+                  id="sim-usage"
+                  type="text"
+                  className="form-input"
+                  placeholder="mis. WhatsApp, Banking, OTP"
+                  value={usagePurpose}
+                  onChange={(e) => setUsagePurpose(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="sim-renewal-tip">
+                Tips Perpanjangan
+              </label>
+              <input
+                id="sim-renewal-tip"
+                type="text"
+                className="form-input"
+                placeholder="mis. Isi pulsa Rp5.000 atau beli paket masa aktif"
+                value={renewalTip}
+                onChange={(e) => setRenewalTip(e.target.value)}
+              />
+            </div>
+
+            <div className="form-grid-2">
+              <div className="form-field">
+                <label className="form-label" htmlFor="sim-services">
+                  Layanan Non-Google (koma)
+                </label>
+                <input
+                  id="sim-services"
+                  type="text"
+                  className="form-input"
+                  placeholder="WhatsApp, BCA Mobile"
+                  value={linkedServicesText}
+                  onChange={(e) => setLinkedServicesText(e.target.value)}
+                />
+              </div>
+
+              <div className="form-field">
+                <label className="form-label" htmlFor="sim-tags">
+                  Tags (koma)
+                </label>
+                <input
+                  id="sim-tags"
+                  type="text"
+                  className="form-input"
+                  placeholder="otp, utama"
+                  value={tagsText}
+                  onChange={(e) => setTagsText(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="sim-notes">
+                Catatan
+              </label>
+              <textarea
+                id="sim-notes"
+                className="form-textarea"
+                style={{ minHeight: 60 }}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
           </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="sim-tags">
-              Tags (pisahkan koma)
-            </label>
-            <input
-              id="sim-tags"
-              type="text"
-              className="form-input"
-              placeholder="utama, otp, cadangan"
-              value={tagsText}
-              onChange={(e) => setTagsText(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="sim-notes">
-            Catatan Tambahan
-          </label>
-          <textarea
-            id="sim-notes"
-            className="form-textarea"
-            placeholder="Catatan paket, lokasi fisik SIM jika dilepas, dll."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        </details>
       </form>
     </Modal>
   );
