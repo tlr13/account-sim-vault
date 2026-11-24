@@ -818,6 +818,55 @@ a:hover {
   font-family: var(--font-mono);
 }
 
+/* Inline Notes / Project List Section at Bottom of Account Cards */
+.card-notes-section {
+  padding-top: 11px;
+  border-top: 1px solid var(--border-hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.card-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-notes-display {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-hairline);
+  background: var(--bg-subtle);
+  color: var(--ink-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.card-notes-display:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.card-notes-display.empty {
+  color: var(--ink-muted);
+  border-style: dashed;
+  background: transparent;
+}
+
+.card-notes-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* Progress Bars (Drive Quota & SIM Active Period) */
 .progress-track {
   width: 100%;

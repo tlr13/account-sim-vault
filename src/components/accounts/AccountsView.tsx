@@ -1,17 +1,16 @@
 import {
+  Check,
   CheckCircle2,
-  Cloud,
   Copy,
-  CreditCard,
   Edit3,
-  FolderKanban,
-  Globe,
+  FileText,
   LayoutGrid,
   Plus,
   ShieldCheck,
   Smartphone,
   Table2,
   Upload,
+  X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
@@ -29,6 +28,7 @@ interface AccountsViewProps {
   onOpenAccount: (accountId: string) => void;
   onAddAccount: () => void;
   onEditAccount: (account: GoogleAccount) => void;
+  onSaveAccountNotes: (account: GoogleAccount, notes: string) => void;
   onToggleNeedsCancel: (account: GoogleAccount) => void;
   onOpenImport: () => void;
   onCopy: (text: string, label: string) => void;
@@ -42,6 +42,7 @@ export function AccountsView({
   onOpenAccount,
   onAddAccount,
   onEditAccount,
+  onSaveAccountNotes,
   onToggleNeedsCancel,
   onOpenImport,
   onCopy,
@@ -51,6 +52,8 @@ export function AccountsView({
   );
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [localFilter, setLocalFilter] = useState('');
+  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  const [notesDraft, setNotesDraft] = useState('');
 
   const phoneById = useMemo(
     () => new Map(vault.phoneNumbers.map((p) => [p.id, p])),
@@ -113,14 +116,29 @@ export function AccountsView({
     });
   }, [vault.googleAccounts, statusFilter, localFilter]);
 
+  const startEditingNotes = (acc: GoogleAccount) => {
+    setEditingNotesId(acc.id);
+    setNotesDraft(acc.notes);
+  };
+
+  const commitNotes = (acc: GoogleAccount) => {
+    onSaveAccountNotes(acc, notesDraft.trim());
+    setEditingNotesId(null);
+  };
+
+  const cancelNotes = () => {
+    setEditingNotesId(null);
+    setNotesDraft('');
+  };
+
   return (
     <>
       <div className="page-header">
         <div>
           <h1 className="page-title">Daftar Akun Email ({vault.googleAccounts.length})</h1>
           <p className="page-subtitle">
-            Tampilan tabel ringkas untuk memindai banyak akun sekaligus — klik baris untuk detail
-            project cloud, website &amp; aset.
+            Ketuk kotak catatan di tiap akun untuk menulis list project atau aktivitas yang kamu
+            lakukan dengan email tersebut.
           </p>
         </div>
         <div className="filter-bar">
@@ -212,7 +230,7 @@ export function AccountsView({
             type="text"
             className="form-input"
             style={{ width: 220 }}
-            placeholder="Saring email, pemakai, paket..."
+            placeholder="Saring email, project, catatan..."
             value={localFilter}
             onChange={(e) => setLocalFilter(e.target.value)}
           />
@@ -264,7 +282,7 @@ export function AccountsView({
                 <th>Hint Pass</th>
                 <th>Kondisi / Pemakai</th>
                 <th>Subscription &amp; Cancel</th>
-                <th>SIM &amp; Catatan</th>
+                <th>Catatan / List Project</th>
                 <th style={{ width: 88, textAlign: 'right' }}>Aksi</th>
               </tr>
             </thead>
@@ -272,15 +290,12 @@ export function AccountsView({
               {filteredAccounts.map((acc, index) => {
                 const statusMeta = ACCOUNT_STATUS_META[acc.status] ?? ACCOUNT_STATUS_META.Active;
                 const linkedPhone = phoneById.get(acc.linkedPhoneId);
-                const cloudCount = vault.cloudProjects.filter((c) => c.accountId === acc.id).length;
-                const webCount = vault.connectedWebsites.filter(
-                  (w) => w.accountId === acc.id
-                ).length;
                 const extraSubs = vault.subscriptions.filter(
                   (s) => s.accountId === acc.id && (s.status === 'Active' || s.status === 'Trial')
                 );
                 const subDisplay =
                   acc.quickSubName || extraSubs.map((s) => s.serviceName).join(', ');
+                const isEditingRowNotes = editingNotesId === acc.id;
 
                 return (
                   <tr
@@ -381,38 +396,55 @@ export function AccountsView({
                       </div>
                     </td>
 
-                    <td>
-                      <div className="table-cell-stack" style={{ gap: 4, maxWidth: 260 }}>
-                        {linkedPhone && (
-                          <span className="table-subtext mono">
-                            SIM: {linkedPhone.provider} (
-                            {privacyMask
-                              ? maskPhoneNumber(linkedPhone.phoneNumber)
-                              : linkedPhone.phoneNumber}
-                            )
-                          </span>
-                        )}
-                        {(cloudCount > 0 || webCount > 0) && (
-                          <span className="table-subtext">
-                            {cloudCount} cloud · {webCount} website
-                          </span>
-                        )}
-                        {acc.notes && (
-                          <span
-                            className="table-subtext"
-                            style={{
-                              color: 'var(--ink-secondary)',
-                              whiteSpace: 'normal',
-                              lineHeight: 1.35,
-                            }}
+                    <td onClick={(e) => e.stopPropagation()} style={{ minWidth: 240 }}>
+                      {isEditingRowNotes ? (
+                        <div className="card-notes-editor">
+                          <textarea
+                            className="form-textarea"
+                            rows={3}
+                            autoFocus
+                            placeholder="- Project Antigravity: ..."
+                            value={notesDraft}
+                            onChange={(e) => setNotesDraft(e.target.value)}
+                          />
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={cancelNotes}
+                            >
+                              Batal
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              onClick={() => commitNotes(acc)}
+                            >
+                              <Check size={13} /> Simpan
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="table-cell-stack" style={{ gap: 4, maxWidth: 320 }}>
+                          {linkedPhone && (
+                            <span className="table-subtext mono">
+                              SIM: {linkedPhone.provider} (
+                              {privacyMask
+                                ? maskPhoneNumber(linkedPhone.phoneNumber)
+                                : linkedPhone.phoneNumber}
+                              )
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className={`card-notes-display${acc.notes ? '' : ' empty'}`}
+                            style={{ padding: '6px 9px', fontSize: 12.5 }}
+                            onClick={() => startEditingNotes(acc)}
                           >
-                            {acc.notes}
-                          </span>
-                        )}
-                        {!linkedPhone && !acc.notes && cloudCount === 0 && webCount === 0 && (
-                          <span className="table-subtext">—</span>
-                        )}
-                      </div>
+                            {acc.notes || '+ Tulis catatan / list project...'}
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     <td
@@ -446,12 +478,9 @@ export function AccountsView({
         <div className="card-grid-2">
           {filteredAccounts.map((acc) => {
             const statusMeta = ACCOUNT_STATUS_META[acc.status] ?? ACCOUNT_STATUS_META.Active;
-            const cloudCount = vault.cloudProjects.filter((c) => c.accountId === acc.id).length;
-            const webCount = vault.connectedWebsites.filter((w) => w.accountId === acc.id).length;
-            const subCount = vault.subscriptions.filter((s) => s.accountId === acc.id).length;
-            const otherCount = vault.otherAssets.filter((o) => o.accountId === acc.id).length;
             const linkedPhone = phoneById.get(acc.linkedPhoneId);
             const phoneHealth = linkedPhone ? getSimHealth(linkedPhone) : null;
+            const isEditingCardNotes = editingNotesId === acc.id;
 
             return (
               <article
@@ -497,7 +526,10 @@ export function AccountsView({
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <span className={`badge badge-${statusMeta.tone}`}>{statusMeta.label}</span>
                   {acc.passwordHint && (
                     <span className="tag-chip">Pass: {acc.passwordHint}</span>
@@ -509,7 +541,15 @@ export function AccountsView({
                     </span>
                   )}
                   {acc.quickSubNeedsCancel && (
-                    <span className="badge badge-warning">Belum Cancel</span>
+                    <button
+                      type="button"
+                      className="badge badge-warning"
+                      style={{ cursor: 'pointer' }}
+                      title="Ketuk untuk menandai sudah cancel"
+                      onClick={() => onToggleNeedsCancel(acc)}
+                    >
+                      Belum Cancel
+                    </button>
                   )}
                   {acc.has2FA && (
                     <span className="badge badge-neutral">
@@ -518,15 +558,11 @@ export function AccountsView({
                   )}
                 </div>
 
-                {(acc.holderName || acc.notes) && (
+                {acc.holderName && (
                   <div style={{ fontSize: 12.5, color: 'var(--ink-secondary)' }}>
-                    {acc.holderName && (
-                      <div>
-                        <strong>Pemakai/Pembeli:</strong> {acc.holderName}
-                        {acc.holderUntil ? ` (s/d ${acc.holderUntil})` : ''}
-                      </div>
-                    )}
-                    {acc.notes && <div>{acc.notes}</div>}
+                    <strong>{acc.status === 'Sold' ? 'Pembeli:' : 'Pemakai:'}</strong>{' '}
+                    {acc.holderName}
+                    {acc.holderUntil ? ` (s/d ${acc.holderUntil})` : ''}
                   </div>
                 )}
 
@@ -569,19 +605,63 @@ export function AccountsView({
                   </div>
                 )}
 
-                <div className="stat-row">
-                  <span className="mini-stat">
-                    <Cloud size={13} /> <strong>{cloudCount}</strong> Cloud
-                  </span>
-                  <span className="mini-stat">
-                    <Globe size={13} /> <strong>{webCount}</strong> Web
-                  </span>
-                  <span className="mini-stat">
-                    <CreditCard size={13} /> <strong>{subCount}</strong> Sub
-                  </span>
-                  <span className="mini-stat">
-                    <FolderKanban size={13} /> <strong>{otherCount}</strong> Lainnya
-                  </span>
+                {/* Bagian Bawah: Catatan Bebas / List Project Inline */}
+                <div
+                  className="card-notes-section"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="card-notes-header">
+                    <span
+                      className="sim-date-label"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                    >
+                      <FileText size={12} /> Catatan &amp; List Project
+                    </span>
+                    {!isEditingCardNotes && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ height: 24, padding: '0 7px', fontSize: 11.5 }}
+                        onClick={() => startEditingNotes(acc)}
+                      >
+                        <Edit3 size={12} /> {acc.notes ? 'Ubah' : 'Tulis'}
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditingCardNotes ? (
+                    <div className="card-notes-editor">
+                      <textarea
+                        className="form-textarea"
+                        rows={4}
+                        autoFocus
+                        placeholder={'Tulis bebas apa saja yang dilakukan dengan email ini...\nContoh:\n- Project Antigravity: AccVault\n- Project Antigravity: Laporan Otomatis'}
+                        value={notesDraft}
+                        onChange={(e) => setNotesDraft(e.target.value)}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                        <button type="button" className="btn btn-sm" onClick={cancelNotes}>
+                          <X size={13} /> Batal
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          onClick={() => commitNotes(acc)}
+                        >
+                          <Check size={13} /> Simpan Catatan
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`card-notes-display${acc.notes ? '' : ' empty'}`}
+                      onClick={() => startEditingNotes(acc)}
+                    >
+                      {acc.notes ||
+                        '+ Ketuk untuk tulis catatan atau list project Antigravity di akun ini...'}
+                    </button>
+                  )}
                 </div>
               </article>
             );

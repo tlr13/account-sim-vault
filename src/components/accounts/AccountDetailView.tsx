@@ -1,10 +1,12 @@
 import {
   ArrowLeft,
+  Check,
   Cloud,
   Copy,
   CreditCard,
   Edit3,
   ExternalLink,
+  FileText,
   FolderKanban,
   Globe,
   Plus,
@@ -37,6 +39,7 @@ interface AccountDetailViewProps {
   onOpenAccount: (accountId: string) => void;
   onNavigatePhones: () => void;
   onEditAccount: (account: GoogleAccount) => void;
+  onSaveAccountNotes: (account: GoogleAccount, notes: string) => void;
   onDeleteAccount: (account: GoogleAccount) => void;
   onCopy: (text: string, label: string) => void;
   onAddItem: (
@@ -53,7 +56,7 @@ interface AccountDetailViewProps {
   onDeleteOther: (id: string) => void;
 }
 
-type DetailTab = 'cloud' | 'websites' | 'subscriptions' | 'other' | 'meta';
+type DetailTab = 'meta' | 'cloud' | 'websites' | 'subscriptions' | 'other';
 
 export function AccountDetailView({
   account,
@@ -63,6 +66,7 @@ export function AccountDetailView({
   onOpenAccount,
   onNavigatePhones,
   onEditAccount,
+  onSaveAccountNotes,
   onDeleteAccount,
   onCopy,
   onAddItem,
@@ -75,7 +79,8 @@ export function AccountDetailView({
   onEditOther,
   onDeleteOther,
 }: AccountDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<DetailTab>('cloud');
+  const [activeTab, setActiveTab] = useState<DetailTab>('meta');
+  const [notesDraft, setNotesDraft] = useState(() => account.notes);
 
   const clouds = vault.cloudProjects.filter((c) => c.accountId === account.id);
   const websites = vault.connectedWebsites.filter((w) => w.accountId === account.id);
@@ -320,6 +325,15 @@ export function AccountDetailView({
           <button
             type="button"
             role="tab"
+            aria-selected={activeTab === 'meta'}
+            className={`segmented-tab${activeTab === 'meta' ? ' active' : ''}`}
+            onClick={() => setActiveTab('meta')}
+          >
+            <FileText size={15} /> Catatan &amp; Project
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={activeTab === 'cloud'}
             className={`segmented-tab${activeTab === 'cloud' ? ' active' : ''}`}
             onClick={() => setActiveTab('cloud')}
@@ -352,15 +366,6 @@ export function AccountDetailView({
             onClick={() => setActiveTab('other')}
           >
             <FolderKanban size={15} /> Lainnya ({others.length})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'meta'}
-            className={`segmented-tab${activeTab === 'meta' ? ' active' : ''}`}
-            onClick={() => setActiveTab('meta')}
-          >
-            Custom Fields &amp; Catatan
           </button>
         </div>
 
@@ -673,24 +678,48 @@ export function AccountDetailView({
       )}
 
       {activeTab === 'meta' && (
-        <section className="surface-card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <div className="sim-date-label" style={{ marginBottom: 6 }}>
-              Catatan Akun
+        <section className="surface-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="form-field">
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
+            >
+              <label className="form-label" htmlFor="detail-account-notes">
+                Catatan Bebas &amp; List Project di Akun Ini
+              </label>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                disabled={notesDraft.trim() === account.notes.trim()}
+                onClick={() => onSaveAccountNotes(account, notesDraft.trim())}
+              >
+                <Check size={14} /> Simpan Catatan
+              </button>
             </div>
-            <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--ink-secondary)' }}>
-              {account.notes || 'Belum ada catatan tambahan.'}
-            </p>
+            <textarea
+              id="detail-account-notes"
+              className="form-textarea"
+              rows={7}
+              placeholder={'Tulis bebas apa saja yang dilakukan dengan email ini...\nContoh:\n- Project Antigravity: ...\n- Website / tools yang terhubung: ...'}
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+            />
+            <span className="form-help">
+              Semua yang kamu tulis di sini langsung masuk ke Global Search (Ctrl+K) dan tersimpan
+              otomatis ke Google Sheets.
+            </span>
           </div>
-          <div>
-            <div className="sim-date-label" style={{ marginBottom: 6 }}>
-              Custom Fields
-            </div>
-            {account.customFields.length === 0 ? (
-              <span style={{ color: 'var(--ink-muted)', fontSize: 13 }}>
-                Belum ada custom field. Klik Edit Akun untuk menambahkan.
-              </span>
-            ) : (
+
+          {account.customFields.length > 0 && (
+            <div>
+              <div className="sim-date-label" style={{ marginBottom: 6 }}>
+                Custom Fields
+              </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {account.customFields.map((cf, i) => (
                   <span key={i} className="tag-chip">
@@ -698,8 +727,9 @@ export function AccountDetailView({
                   </span>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
           {account.tags.length > 0 && (
             <div>
               <div className="sim-date-label" style={{ marginBottom: 6 }}>

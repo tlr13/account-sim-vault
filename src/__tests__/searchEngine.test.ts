@@ -45,8 +45,21 @@ describe('Global Reverse-Lookup Search Engine', () => {
     );
   });
 
-  it('searches inside custom fields and tags', () => {
+  it('searches inside custom fields, tags, and freeform account notes (e.g. Antigravity project lists)', () => {
     const results = searchVault(vault, 'asia-southeast2');
     expect(results.some((r) => r.title === 'TokoKita Backend API')).toBe(true);
+
+    const vaultWithNote = {
+      ...vault,
+      googleAccounts: vault.googleAccounts.map((a, idx) =>
+        idx === 0
+          ? { ...a, notes: '- Project Antigravity: Laporan Bapenda Kubar\n- Project Antigravity: AccVault' }
+          : a
+      ),
+    };
+    const noteMatch = searchVault(vaultWithNote, 'Laporan Bapenda');
+    expect(noteMatch.length).toBeGreaterThan(0);
+    expect(noteMatch[0].category).toBe('account');
+    expect(noteMatch[0].ownerAccount?.email).toBe(vault.googleAccounts[0].email);
   });
 });

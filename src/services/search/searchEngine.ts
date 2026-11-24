@@ -68,8 +68,9 @@ export function buildSearchEntries(
       detailLine: [
         acc.quickSubName
           ? `${acc.quickSubName}${acc.quickSubNeedsCancel ? ' (Belum Cancel)' : ''}`
-          : acc.primaryPurpose,
+          : '',
         acc.holderName ? `Pemakai: ${acc.holderName}` : '',
+        acc.notes ? acc.notes.replace(/\s+/g, ' ').slice(0, 90) : acc.primaryPurpose,
         linkedPhone ? `SIM: ${linkedPhone.provider}` : '',
       ]
         .filter(Boolean)
@@ -329,12 +330,12 @@ export function searchVault(
     ignoreLocation: true,
     minMatchCharLength: 2,
     keys: [
-      { name: 'title', weight: 0.35 },
-      { name: 'keywords', weight: 0.3 },
-      { name: 'ownerEmailText', weight: 0.15 },
-      { name: 'tagsText', weight: 0.1 },
-      { name: 'customFieldsText', weight: 0.06 },
-      { name: 'notes', weight: 0.04 },
+      { name: 'title', weight: 0.3 },
+      { name: 'keywords', weight: 0.24 },
+      { name: 'notes', weight: 0.24 },
+      { name: 'ownerEmailText', weight: 0.1 },
+      { name: 'tagsText', weight: 0.07 },
+      { name: 'customFieldsText', weight: 0.05 },
     ],
   });
 

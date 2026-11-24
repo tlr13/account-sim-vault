@@ -894,6 +894,7 @@ export default function App() {
           {activeTab === 'accounts' &&
             (selectedAccount ? (
               <AccountDetailView
+                key={selectedAccount.id}
                 account={selectedAccount}
                 vault={vault}
                 privacyMask={privacyMask}
@@ -901,6 +902,17 @@ export default function App() {
                 onOpenAccount={openAccountDetail}
                 onNavigatePhones={() => navigateTab('phones')}
                 onEditAccount={(acc) => setAccountModal({ open: true, editing: acc })}
+                onSaveAccountNotes={(acc, nextNotes) => {
+                  commitVault((prev) => ({
+                    ...prev,
+                    googleAccounts: prev.googleAccounts.map((a) =>
+                      a.id === acc.id
+                        ? { ...a, notes: nextNotes, updatedAt: new Date().toISOString() }
+                        : a
+                    ),
+                  }));
+                  showToast('Catatan akun disimpan.');
+                }}
                 onDeleteAccount={deleteAccount}
                 onCopy={handleCopy}
                 onAddItem={(kind, accountId) => handleQuickAdd(kind, accountId)}
@@ -940,6 +952,17 @@ export default function App() {
                 onOpenAccount={openAccountDetail}
                 onAddAccount={() => setAccountModal({ open: true, editing: null })}
                 onEditAccount={(acc) => setAccountModal({ open: true, editing: acc })}
+                onSaveAccountNotes={(acc, nextNotes) => {
+                  commitVault((prev) => ({
+                    ...prev,
+                    googleAccounts: prev.googleAccounts.map((a) =>
+                      a.id === acc.id
+                        ? { ...a, notes: nextNotes, updatedAt: new Date().toISOString() }
+                        : a
+                    ),
+                  }));
+                  showToast('Catatan akun disimpan.');
+                }}
                 onToggleNeedsCancel={toggleNeedsCancel}
                 onOpenImport={() => setImportOpen(true)}
                 onCopy={handleCopy}
