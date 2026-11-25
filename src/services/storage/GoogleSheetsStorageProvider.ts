@@ -68,7 +68,7 @@ export async function testGoogleSheetsConnection(
 
 export async function pullVaultFromGoogleSheets(
   config: GoogleSheetsSyncConfig
-): Promise<{ vault: VaultData; spreadsheetName: string }> {
+): Promise<{ vault: VaultData; spreadsheetName: string; hasProjectsField: boolean }> {
   const baseUrl = validateScriptUrl(config);
   const res = await fetch(buildGetUrl(baseUrl, 'pull', config.apiKey), {
     method: 'GET',
@@ -81,6 +81,7 @@ export async function pullVaultFromGoogleSheets(
 
   const base = createEmptyVault();
   const raw = data.vault;
+  const hasProjectsField = Array.isArray(raw.projects);
   const vault: VaultData = {
     version: 1,
     exportedAt: data.serverTime || new Date().toISOString(),
@@ -93,8 +94,8 @@ export async function pullVaultFromGoogleSheets(
     googleAccounts: Array.isArray(raw.googleAccounts)
       ? raw.googleAccounts.map((a) => normalizeAccountRecord(a))
       : base.googleAccounts,
-    projects: Array.isArray(raw.projects)
-      ? raw.projects.map((p) => normalizeProjectRecord(p)).filter((p) => p.name !== '')
+    projects: hasProjectsField
+      ? raw.projects!.map((p) => normalizeProjectRecord(p)).filter((p) => p.name !== '')
       : base.projects,
     cloudProjects: Array.isArray(raw.cloudProjects) ? raw.cloudProjects : base.cloudProjects,
     connectedWebsites: Array.isArray(raw.connectedWebsites)
@@ -107,6 +108,7 @@ export async function pullVaultFromGoogleSheets(
   return {
     vault,
     spreadsheetName: data.spreadsheetName || 'Google Sheets',
+    hasProjectsField,
   };
 }
 

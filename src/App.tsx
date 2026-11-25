@@ -46,6 +46,7 @@ import {
   pushVaultToGoogleSheets,
 } from './services/storage/GoogleSheetsStorageProvider';
 import {
+  hasPendingCloudPush,
   loadLocalVault,
   loadPrivacyPreference,
   loadSyncSettings,
@@ -54,6 +55,7 @@ import {
   savePrivacyPreference,
   saveSyncSettings,
   saveThemePreference,
+  setPendingCloudPush,
 } from './services/storage/LocalStorageProvider';
 import {
   getSupabaseUser,
@@ -245,6 +247,7 @@ export default function App() {
       try {
         if (currentSettings.mode === 'gsheets') {
           await pushVaultToGoogleSheets(currentSettings.gsheets, dataToPush);
+          setPendingCloudPush(false);
           lastPullTimestampRef.current = Date.now();
           setSyncState('synced');
           setLastSyncText(
@@ -259,12 +262,14 @@ export default function App() {
           };
           setSettings(updated);
           saveSyncSettings(updated);
+          setPendingCloudPush(false);
           lastPullTimestampRef.current = Date.now();
           setSyncState('synced');
           setLastSyncText(`Tersinkron ke GitHub · ${new Date().toLocaleTimeString('id-ID')}`);
           if (!silent) showToast('Data berhasil disimpan ke GitHub Private Repo!');
         } else if (currentSettings.mode === 'supabase') {
           await pushVaultToSupabase(currentSettings.supabase, dataToPush);
+          setPendingCloudPush(false);
           lastPullTimestampRef.current = Date.now();
           setSyncState('synced');
           setLastSyncText(`Tersinkron ke Supabase · ${new Date().toLocaleTimeString('id-ID')}`);
@@ -288,14 +293,27 @@ export default function App() {
       try {
         if (settings.mode === 'gsheets') {
           const res = await pullVaultFromGoogleSheets(settings.gsheets);
-          setVault(res.vault);
-          saveLocalVault(res.vault);
+          let preservedLocalProjects = false;
+          setVault((prev) => {
+            const nextVault = res.hasProjectsField
+              ? res.vault
+              : { ...res.vault, projects: prev.projects ?? [] };
+            if (!res.hasProjectsField && (prev.projects ?? []).length > 0) {
+              preservedLocalProjects = true;
+            }
+            saveLocalVault(nextVault);
+            return nextVault;
+          });
           lastPullTimestampRef.current = Date.now();
           setSyncState('synced');
           setLastSyncText(
             `Auto-sync Google Sheets · ${new Date().toLocaleTimeString('id-ID')}`
           );
-          if (!silent) {
+          if (preservedLocalProjects) {
+            showToast(
+              'List Project lokal diamankan. Update Code.gs (New version) agar tab Projects ikut sinkron ke Sheets.'
+            );
+          } else if (!silent) {
             showToast(
               `Data terbaru ditarik (${res.vault.googleAccounts.length} akun, ${res.vault.phoneNumbers.length} SIM)`
             );
@@ -352,15 +370,54 @@ export default function App() {
       settings.supabase.autoPull &&
       Boolean(activeSupabaseUser));
 
-  const autoPullRef = useRef({ canAutoPull, pull: pullFromActiveCloud });
+  const canAutoPush =
+    (settings.mode === 'gsheets' &&
+      settings.gsheets.autoSync &&
+      Boolean(settings.gsheets.scriptUrl.trim())) ||
+    (settings.mode === 'github' &&
+      settings.github.autoSync &&
+      Boolean(settings.github.token.trim())) ||
+    (settings.mode === 'supabase' &&
+      settings.supabase.autoSync &&
+      Boolean(activeSupabaseUser));
+
+  const autoSyncRef = useRef({
+    canAutoPull,
+    canAutoPush,
+    pull: pullFromActiveCloud,
+    push: pushToActiveCloud,
+    vault,
+    settings,
+  });
   useEffect(() => {
-    autoPullRef.current = { canAutoPull, pull: pullFromActiveCloud };
-  }, [canAutoPull, pullFromActiveCloud]);
+    autoSyncRef.current = {
+      canAutoPull,
+      canAutoPush,
+      pull: pullFromActiveCloud,
+      push: pushToActiveCloud,
+      vault,
+      settings,
+    };
+  }, [canAutoPull, canAutoPush, pullFromActiveCloud, pushToActiveCloud, vault, settings]);
 
   useEffect(() => {
-    const triggerPull = (forceNotify: boolean) => {
-      const { canAutoPull: enabled, pull } = autoPullRef.current;
-      if (!enabled) return;
+    const triggerSync = (forceNotify: boolean) => {
+      const {
+        canAutoPull: pullEnabled,
+        canAutoPush: pushEnabled,
+        pull,
+        push,
+        vault: currentVault,
+        settings: currentSettings,
+      } = autoSyncRef.current;
+
+      // If user refreshed before the previous edit finished pushing, push local data FIRST so nothing is lost
+      if (hasPendingCloudPush() && pushEnabled && !bootState.paired) {
+        void push(currentVault, currentSettings, true);
+        return;
+      }
+
+      if (!pullEnabled) return;
       // Do not overwrite pending local edits waiting to push
       if (syncTimerRef.current !== null) return;
       const elapsed = Date.now() - lastPullTimestampRef.current;
@@ -368,14 +425,14 @@ export default function App() {
       void pull(!forceNotify);
     };
 
-    // Initial pull on boot (show toast if device just paired via QR)
+    // Initial sync on boot (show toast if device just paired via QR)
     const initialTimer = window.setTimeout(() => {
-      triggerPull(bootState.paired);
+      triggerSync(bootState.paired);
     }, 150);
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
-        triggerPull(false);
+        triggerSync(false);
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
@@ -403,11 +460,12 @@ export default function App() {
             Boolean(activeSupabaseUser));
 
         if (shouldAutoPush) {
+          setPendingCloudPush(true);
           if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
           syncTimerRef.current = window.setTimeout(() => {
             syncTimerRef.current = null;
             void pushToActiveCloud(next, settings, true);
-          }, 900);
+          }, 350);
         }
         return next;
       });

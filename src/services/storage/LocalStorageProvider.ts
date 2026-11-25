@@ -7,6 +7,7 @@ const VAULT_STORAGE_KEY = 'accvault_data_v1';
 const SETTINGS_STORAGE_KEY = 'accvault_sync_settings_v1';
 const THEME_STORAGE_KEY = 'accvault_theme_v1';
 const PRIVACY_STORAGE_KEY = 'accvault_privacy_v1';
+const PENDING_PUSH_STORAGE_KEY = 'accvault_pending_push_v1';
 
 export function getDefaultSyncSettings(): SyncSettings {
   const envUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
@@ -102,4 +103,24 @@ export function loadPrivacyPreference(): boolean {
 
 export function savePrivacyPreference(masked: boolean): void {
   localStorage.setItem(PRIVACY_STORAGE_KEY, String(masked));
+}
+
+export function hasPendingCloudPush(): boolean {
+  try {
+    return localStorage.getItem(PENDING_PUSH_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setPendingCloudPush(pending: boolean): void {
+  try {
+    if (pending) {
+      localStorage.setItem(PENDING_PUSH_STORAGE_KEY, '1');
+    } else {
+      localStorage.removeItem(PENDING_PUSH_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage quota/privacy mode errors
+  }
 }
