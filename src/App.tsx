@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import {
   Eye,
   EyeOff,
+  FolderKanban,
   Layers,
   LayoutDashboard,
   Mail,
@@ -31,6 +32,7 @@ import { ItemsHubView } from './components/items/ItemsHubView';
 import { ExtendSimModal } from './components/phones/ExtendSimModal';
 import { PhoneFormModal } from './components/phones/PhoneFormModal';
 import { PhonesView } from './components/phones/PhonesView';
+import { ProjectsView } from './components/projects/ProjectsView';
 import { GlobalSearchModal } from './components/search/GlobalSearchModal';
 import { SettingsView } from './components/settings/SettingsView';
 import { buildSampleVault } from './data/sampleData';
@@ -68,6 +70,7 @@ import {
   type ItemsSubTab,
   type OtherAsset,
   type PhoneNumber,
+  type ProjectItem,
   type Subscription,
   type SyncSettings,
   type VaultData,
@@ -519,6 +522,8 @@ export default function App() {
   const handleSelectSearchResult = (res: GlobalSearchResult) => {
     if (res.category === 'account') {
       openAccountDetail(res.id);
+    } else if (res.category === 'project') {
+      navigateTab('projects');
     } else if (res.category === 'phone') {
       navigateTab('phones');
     } else if (res.ownerAccount) {
@@ -692,6 +697,28 @@ export default function App() {
     showToast(`Aset ${item.title} disimpan.`);
   };
 
+  const saveProject = (project: ProjectItem) => {
+    commitVault((prev) => {
+      const list = prev.projects ?? [];
+      const exists = list.some((p) => p.id === project.id);
+      return {
+        ...prev,
+        projects: exists
+          ? list.map((p) => (p.id === project.id ? project : p))
+          : [...list, project],
+      };
+    });
+    showToast(`Project "${project.name}" disimpan.`);
+  };
+
+  const deleteProject = (id: string) => {
+    commitVault((prev) => ({
+      ...prev,
+      projects: (prev.projects ?? []).filter((p) => p.id !== id),
+    }));
+    showToast('Project dihapus.');
+  };
+
   const syncModeLabel =
     settings.mode === 'gsheets'
       ? settings.gsheets.scriptUrl
@@ -740,6 +767,17 @@ export default function App() {
             <Mail size={17} />
             <span>Akun Google</span>
             <span className="nav-badge">{vault.googleAccounts.length}</span>
+          </button>
+
+          <button
+            id="nav-projects"
+            type="button"
+            className={`nav-item${activeTab === 'projects' ? ' active' : ''}`}
+            onClick={() => navigateTab('projects')}
+          >
+            <FolderKanban size={17} />
+            <span>Project</span>
+            <span className="nav-badge">{(vault.projects ?? []).length}</span>
           </button>
 
           <button
@@ -820,7 +858,7 @@ export default function App() {
           >
             <Search size={16} />
             <span className="search-trigger-text">
-              Cari website, project cloud, subscription, nomor HP, atau email...
+              Cari project, email, nomor HP, website, atau catatan...
             </span>
             <span className="kbd-hint">Ctrl K</span>
           </button>
@@ -913,6 +951,8 @@ export default function App() {
                   }));
                   showToast('Catatan akun disimpan.');
                 }}
+                onSaveProject={saveProject}
+                onDeleteProject={deleteProject}
                 onDeleteAccount={deleteAccount}
                 onCopy={handleCopy}
                 onAddItem={(kind, accountId) => handleQuickAdd(kind, accountId)}
@@ -950,6 +990,7 @@ export default function App() {
                 vault={vault}
                 privacyMask={privacyMask}
                 onOpenAccount={openAccountDetail}
+                onOpenProjects={() => navigateTab('projects')}
                 onAddAccount={() => setAccountModal({ open: true, editing: null })}
                 onEditAccount={(acc) => setAccountModal({ open: true, editing: acc })}
                 onSaveAccountNotes={(acc, nextNotes) => {
@@ -968,6 +1009,16 @@ export default function App() {
                 onCopy={handleCopy}
               />
             ))}
+
+          {activeTab === 'projects' && (
+            <ProjectsView
+              vault={vault}
+              onSaveProject={saveProject}
+              onDeleteProject={deleteProject}
+              onOpenAccount={openAccountDetail}
+              onCopy={handleCopy}
+            />
+          )}
 
           {activeTab === 'phones' && (
             <PhonesView
@@ -1086,20 +1137,20 @@ export default function App() {
         </button>
         <button
           type="button"
+          className={`mobile-nav-btn${activeTab === 'projects' ? ' active' : ''}`}
+          onClick={() => navigateTab('projects')}
+        >
+          <FolderKanban size={19} />
+          <span>Project</span>
+        </button>
+        <button
+          type="button"
           className={`mobile-nav-btn${activeTab === 'phones' ? ' active' : ''}`}
           onClick={() => navigateTab('phones')}
         >
           <Smartphone size={19} />
           <span>SIM</span>
           {urgentSimCount > 0 && <span className="mobile-nav-dot" />}
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn${activeTab === 'items' ? ' active' : ''}`}
-          onClick={() => navigateTab('items')}
-        >
-          <Layers size={19} />
-          <span>Aset</span>
         </button>
         <button
           type="button"

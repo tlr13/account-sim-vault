@@ -156,6 +156,36 @@ export function buildSearchEntries(
     });
   }
 
+  const accountByEmailLower = new Map(
+    vault.googleAccounts
+      .filter((a) => a.email.trim() !== '')
+      .map((a) => [a.email.trim().toLowerCase(), a])
+  );
+
+  for (const prj of vault.projects ?? []) {
+    const owner =
+      accountMap.get(prj.accountId) ??
+      (prj.email.trim() ? accountByEmailLower.get(prj.email.trim().toLowerCase()) : undefined);
+    const email = prj.email.trim() || owner?.email || '';
+    entries.push({
+      id: prj.id,
+      category: 'project',
+      title: prj.name,
+      subtitle: email || 'Belum ada email terpilih',
+      detailLine: [owner?.aliasLabel, prj.notes].filter(Boolean).join(' · '),
+      ownerAccountId: owner?.id,
+      ownerEmailText: email,
+      copyValue: email || prj.name,
+      copyLabel: email ? 'Salin Email' : 'Salin Project',
+      badgeText: 'Project',
+      badgeTone: 'info',
+      keywords: [prj.name, email, owner?.aliasLabel ?? '', prj.notes].join(' '),
+      tagsText: '',
+      customFieldsText: '',
+      notes: prj.notes,
+    });
+  }
+
   for (const cloud of vault.cloudProjects) {
     const owner = accountMap.get(cloud.accountId);
     entries.push({

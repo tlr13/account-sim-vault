@@ -28,17 +28,19 @@ describe('Crypto, Backup IO, Smart Excel Import, and Calendar ICS', () => {
 
     expect(restored.googleAccounts).toHaveLength(vault.googleAccounts.length);
     expect(restored.phoneNumbers).toHaveLength(vault.phoneNumbers.length);
+    expect(restored.projects).toHaveLength(vault.projects.length);
     expect(restored.cloudProjects).toHaveLength(vault.cloudProjects.length);
     expect(restored.connectedWebsites).toHaveLength(vault.connectedWebsites.length);
     expect(restored.subscriptions).toHaveLength(vault.subscriptions.length);
     expect(restored.otherAssets).toHaveLength(vault.otherAssets.length);
   });
 
-  it('builds a 6-sheet Excel workbook containing all entity tabs', async () => {
+  it('builds a 7-sheet Excel workbook containing all entity tabs including Projects', async () => {
     const wb = await buildExcelWorkbook(vault);
     expect(wb.SheetNames).toEqual([
       'Google_Accounts',
       'Phone_Numbers',
+      'Projects',
       'Cloud_Projects',
       'Connected_Websites',
       'Subscriptions',

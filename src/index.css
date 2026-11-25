@@ -1540,3 +1540,132 @@ a:hover {
     background: var(--danger);
   }
 }
+
+/* ==========================================================================
+   Projects Table & Account Card Auto-Linked Projects
+   ========================================================================== */
+
+.project-quick-add {
+  padding: 16px;
+}
+
+.project-quick-add-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.15fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.project-quick-add-btn-wrap {
+  display: flex;
+  align-items: flex-end;
+}
+
+.project-table th,
+.project-table td {
+  vertical-align: middle;
+}
+
+.project-email-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.project-email-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-hairline);
+  background: var(--bg-subtle);
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: left;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.project-email-link:hover {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.project-email-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.project-inline-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.project-inline-edit-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.card-projects-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.card-projects-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border-hairline);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 100%;
+  text-align: left;
+  transition: border-color 0.14s ease, filter 0.14s ease;
+}
+
+.project-chip:hover {
+  border-color: var(--brand);
+}
+
+@media (max-width: 768px) {
+  .project-quick-add-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-inline-edit-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .project-table th,
+  .project-table td {
+    padding: 9px 7px;
+    font-size: 12.5px;
+  }
+
+  .project-email-link {
+    font-size: 11.5px;
+    padding: 3px 7px;
+  }
+}
+

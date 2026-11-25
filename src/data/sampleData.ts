@@ -326,5 +326,31 @@ export function buildSampleVault(referenceDate: Date = new Date()): VaultData {
         updatedAt: nowIso,
       },
     ],
+    projects: [
+      {
+        id: 'prj_sample_accvault',
+        name: 'bikin web accvault',
+        email: 'rafi.personal@gmail.com',
+        accountId: 'acc_personal_main',
+        notes: 'Web PWA pengelola akun & kartu SIM',
+        updatedAt: nowIso,
+      },
+      {
+        id: 'prj_sample_laporan',
+        name: 'laporan skp ekin',
+        email: 'rafi.personal@gmail.com',
+        accountId: 'acc_personal_main',
+        notes: '',
+        updatedAt: nowIso,
+      },
+      {
+        id: 'prj_sample_cloud',
+        name: 'deploy server cloud',
+        email: 'rafi.clouddev@gmail.com',
+        accountId: 'acc_dev_cloud',
+        notes: '',
+        updatedAt: nowIso,
+      },
+    ],
   };
 }

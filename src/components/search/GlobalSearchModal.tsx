@@ -25,6 +25,7 @@ interface GlobalSearchModalProps {
 
 const CATEGORY_OPTIONS: { value: SearchCategory; label: string }[] = [
   { value: 'all', label: 'Semua' },
+  { value: 'project', label: 'Project' },
   { value: 'account', label: 'Akun Google' },
   { value: 'phone', label: 'Kartu SIM' },
   { value: 'cloud', label: 'Cloud' },

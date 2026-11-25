@@ -206,6 +206,7 @@ export async function pullVaultFromSupabase(config: SupabaseSyncConfig): Promise
     exportedAt: new Date().toISOString(),
     phoneNumbers,
     googleAccounts,
+    projects: [],
     cloudProjects,
     connectedWebsites,
     subscriptions,

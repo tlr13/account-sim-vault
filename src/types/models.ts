@@ -144,11 +144,21 @@ export interface OtherAsset {
   updatedAt: string;
 }
 
+export interface ProjectItem {
+  id: string;
+  name: string;
+  email: string;
+  accountId: string; // '' jika email tidak/belum ada di daftar GoogleAccount
+  notes: string;
+  updatedAt: string;
+}
+
 export interface VaultData {
   version: number;
   exportedAt?: string;
   phoneNumbers: PhoneNumber[];
   googleAccounts: GoogleAccount[];
+  projects: ProjectItem[];
   cloudProjects: CloudProject[];
   connectedWebsites: ConnectedWebsite[];
   subscriptions: Subscription[];
@@ -194,6 +204,7 @@ export interface SyncSettings {
 export type SearchCategory =
   | 'all'
   | 'account'
+  | 'project'
   | 'phone'
   | 'cloud'
   | 'website'
@@ -216,7 +227,7 @@ export interface GlobalSearchResult {
   score: number;
 }
 
-export type ActiveTab = 'dashboard' | 'accounts' | 'phones' | 'items' | 'settings';
+export type ActiveTab = 'dashboard' | 'accounts' | 'projects' | 'phones' | 'items' | 'settings';
 export type ItemsSubTab = 'cloud' | 'websites' | 'subscriptions' | 'other';
 export type ViewMode = 'table' | 'cards';
 
@@ -312,6 +323,7 @@ export function createEmptyVault(): VaultData {
     version: 1,
     phoneNumbers: [],
     googleAccounts: [],
+    projects: [],
     cloudProjects: [],
     connectedWebsites: [],
     subscriptions: [],
@@ -331,6 +343,17 @@ export function parseTagsInput(raw: string): string[] {
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean);
+}
+
+export function normalizeProjectRecord(raw: Partial<ProjectItem>): ProjectItem {
+  return {
+    id: raw.id || generateId('prj'),
+    name: (raw.name ?? '').trim(),
+    email: (raw.email ?? '').trim(),
+    accountId: raw.accountId ?? '',
+    notes: raw.notes ?? '',
+    updatedAt: raw.updatedAt ?? new Date().toISOString(),
+  };
 }
 
 export function normalizeAccountRecord(raw: Partial<GoogleAccount>): GoogleAccount {

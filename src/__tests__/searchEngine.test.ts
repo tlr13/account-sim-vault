@@ -62,4 +62,11 @@ describe('Global Reverse-Lookup Search Engine', () => {
     expect(noteMatch[0].category).toBe('account');
     expect(noteMatch[0].ownerAccount?.email).toBe(vault.googleAccounts[0].email);
   });
+
+  it('finds projects from the Projects list and surfaces their owner email', () => {
+    const results = searchVault(vault, 'laporan skp ekin');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].category).toBe('project');
+    expect(results[0].copyValue).toBe('rafi.personal@gmail.com');
+  });
 });

@@ -15,13 +15,15 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
-import type {
-  CloudProject,
-  ConnectedWebsite,
-  GoogleAccount,
-  OtherAsset,
-  Subscription,
-  VaultData,
+import {
+  generateId,
+  type CloudProject,
+  type ConnectedWebsite,
+  type GoogleAccount,
+  type OtherAsset,
+  type ProjectItem,
+  type Subscription,
+  type VaultData,
 } from '../../types/models';
 import {
   formatCurrency,
@@ -40,6 +42,8 @@ interface AccountDetailViewProps {
   onNavigatePhones: () => void;
   onEditAccount: (account: GoogleAccount) => void;
   onSaveAccountNotes: (account: GoogleAccount, notes: string) => void;
+  onSaveProject: (project: ProjectItem) => void;
+  onDeleteProject: (id: string) => void;
   onDeleteAccount: (account: GoogleAccount) => void;
   onCopy: (text: string, label: string) => void;
   onAddItem: (
@@ -67,6 +71,8 @@ export function AccountDetailView({
   onNavigatePhones,
   onEditAccount,
   onSaveAccountNotes,
+  onSaveProject,
+  onDeleteProject,
   onDeleteAccount,
   onCopy,
   onAddItem,
@@ -81,7 +87,14 @@ export function AccountDetailView({
 }: AccountDetailViewProps) {
   const [activeTab, setActiveTab] = useState<DetailTab>('meta');
   const [notesDraft, setNotesDraft] = useState(() => account.notes);
+  const [newProjectName, setNewProjectName] = useState('');
 
+  const accountEmailLower = account.email.trim().toLowerCase();
+  const linkedProjects = vault.projects.filter(
+    (p) =>
+      p.accountId === account.id ||
+      (accountEmailLower !== '' && p.email.trim().toLowerCase() === accountEmailLower)
+  );
   const clouds = vault.cloudProjects.filter((c) => c.accountId === account.id);
   const websites = vault.connectedWebsites.filter((w) => w.accountId === account.id);
   const subs = vault.subscriptions.filter((s) => s.accountId === account.id);
@@ -678,7 +691,99 @@ export function AccountDetailView({
       )}
 
       {activeTab === 'meta' && (
-        <section className="surface-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <section className="surface-card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* Daftar Project yang Memakai Email Ini */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
+            >
+              <span
+                className="form-label"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: 0 }}
+              >
+                <FolderKanban size={14} /> Project di Akun Ini ({linkedProjects.length})
+              </span>
+            </div>
+
+            <form
+              style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                const clean = newProjectName.trim();
+                if (!clean) return;
+                onSaveProject({
+                  id: generateId('prj'),
+                  name: clean,
+                  email: account.email,
+                  accountId: account.id,
+                  notes: '',
+                  updatedAt: new Date().toISOString(),
+                });
+                setNewProjectName('');
+              }}
+            >
+              <input
+                type="text"
+                className="form-input"
+                style={{ flex: '1 1 200px', height: 36 }}
+                placeholder="Tambah nama project untuk email ini..."
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="btn btn-sm btn-primary"
+                disabled={!newProjectName.trim()}
+                style={{ height: 36 }}
+              >
+                <Plus size={14} /> Tambah Project
+              </button>
+            </form>
+
+            {linkedProjects.length > 0 ? (
+              <div className="item-list">
+                {linkedProjects.map((prj, idx) => (
+                  <div key={prj.id} className="item-row" style={{ padding: '9px 12px' }}>
+                    <div className="item-main">
+                      <div className="item-title-line">
+                        <span className="mono" style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
+                          {idx + 1}.
+                        </span>
+                        <span className="item-title">{prj.name}</span>
+                      </div>
+                      {prj.notes && <div className="item-sub">{prj.notes}</div>}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-icon-sm"
+                      title="Hapus project"
+                      onClick={() => {
+                        if (window.confirm(`Hapus project "${prj.name}"?`)) {
+                          onDeleteProject(prj.id);
+                        }
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-muted)' }}>
+                Belum ada project yang ditautkan ke email ini. Tambah dari kotak di atas atau dari
+                menu <strong>Project</strong>.
+              </div>
+            )}
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border-hairline)', margin: 0 }} />
+
           <div className="form-field">
             <div
               style={{
@@ -690,7 +795,7 @@ export function AccountDetailView({
               }}
             >
               <label className="form-label" htmlFor="detail-account-notes">
-                Catatan Bebas &amp; List Project di Akun Ini
+                Catatan Bebas di Akun Ini
               </label>
               <button
                 type="button"
@@ -704,8 +809,8 @@ export function AccountDetailView({
             <textarea
               id="detail-account-notes"
               className="form-textarea"
-              rows={7}
-              placeholder={'Tulis bebas apa saja yang dilakukan dengan email ini...\nContoh:\n- Project Antigravity: ...\n- Website / tools yang terhubung: ...'}
+              rows={6}
+              placeholder={'Tulis bebas apa saja yang dilakukan dengan email ini...\nContoh:\n- Dipakai untuk login GitHub & Vercel\n- Catatan tambahan lainnya'}
               value={notesDraft}
               onChange={(e) => setNotesDraft(e.target.value)}
             />

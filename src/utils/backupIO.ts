@@ -5,6 +5,7 @@ import {
   createEmptyVault,
   generateId,
   normalizeAccountRecord,
+  normalizeProjectRecord,
   type AccountStatus,
   type CustomField,
   type GoogleAccount,
@@ -137,8 +138,16 @@ export async function buildExcelWorkbook(vault: VaultData): Promise<WorkBook> {
     Catatan: o.notes,
   }));
 
+  const projectRows = (vault.projects ?? []).map((prj, idx) => ({
+    no: idx + 1,
+    project: prj.name,
+    email: prj.email || accountById.get(prj.accountId)?.email || '',
+    catatan: prj.notes,
+  }));
+
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(accountsRows), 'Google_Accounts');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(phoneRows), 'Phone_Numbers');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(projectRows), 'Projects');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cloudRows), 'Cloud_Projects');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(webRows), 'Connected_Websites');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(subRows), 'Subscriptions');
@@ -190,6 +199,7 @@ export function parseVaultFromJson(rawJson: string): VaultData {
   if (
     !Array.isArray(obj.googleAccounts) &&
     !Array.isArray(obj.phoneNumbers) &&
+    !Array.isArray(obj.projects) &&
     !Array.isArray(obj.cloudProjects) &&
     !Array.isArray(obj.connectedWebsites) &&
     !Array.isArray(obj.subscriptions) &&
@@ -205,6 +215,9 @@ export function parseVaultFromJson(rawJson: string): VaultData {
     googleAccounts: Array.isArray(obj.googleAccounts)
       ? obj.googleAccounts.map((a) => normalizeAccountRecord(a))
       : base.googleAccounts,
+    projects: Array.isArray(obj.projects)
+      ? obj.projects.map((p) => normalizeProjectRecord(p)).filter((p) => p.name !== '')
+      : base.projects,
     cloudProjects: Array.isArray(obj.cloudProjects) ? obj.cloudProjects : base.cloudProjects,
     connectedWebsites: Array.isArray(obj.connectedWebsites)
       ? obj.connectedWebsites

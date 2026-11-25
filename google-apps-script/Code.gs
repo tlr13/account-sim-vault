@@ -62,6 +62,15 @@ const SHEET_SCHEMAS = {
     'notes',
     'updated_at',
   ],
+  Projects: [
+    'no',
+    'project',
+    'email',
+    'notes',
+    'id',
+    'account_id',
+    'updated_at',
+  ],
   Cloud_Projects: [
     'id',
     'account_id',
@@ -311,6 +320,27 @@ function readVault(ss) {
       };
     });
 
+  const accountIdByEmail = {};
+  for (let i = 0; i < googleAccounts.length; i++) {
+    const em = String(googleAccounts[i].email || '').trim().toLowerCase();
+    if (em) accountIdByEmail[em] = googleAccounts[i].id;
+  }
+
+  const projects = readTableObjects(ss, 'Projects')
+    .filter((r) => String(r.project || r.name || '').trim() !== '')
+    .map((r) => {
+      const emailStr = String(r.email || '').trim();
+      const matchedId = accountIdByEmail[emailStr.toLowerCase()] || '';
+      return {
+        id: String(r.id || 'prj_row_' + r._rowIndex),
+        name: String(r.project || r.name || '').trim(),
+        email: emailStr,
+        accountId: String(r.account_id || matchedId || '').trim(),
+        notes: String(r.notes || '').trim(),
+        updatedAt: String(r.updated_at || nowIso),
+      };
+    });
+
   const cloudProjects = readTableObjects(ss, 'Cloud_Projects')
     .filter((r) => String(r.project_name || '').trim() !== '')
     .map((r) => ({
@@ -387,6 +417,7 @@ function readVault(ss) {
     exportedAt: nowIso,
     phoneNumbers: phoneNumbers,
     googleAccounts: googleAccounts,
+    projects: projects,
     cloudProjects: cloudProjects,
     connectedWebsites: connectedWebsites,
     subscriptions: subscriptions,
@@ -471,6 +502,25 @@ function writeVault(ss, vault) {
     p.updatedAt || nowIso,
   ]);
   writeTableRows(ss, 'Phone_Numbers', phoneRows, ['phone_number', 'active_until', 'grace_until']);
+
+  const emailByAccountId = {};
+  const accountsList = vault.googleAccounts || [];
+  for (let i = 0; i < accountsList.length; i++) {
+    if (accountsList[i].id && accountsList[i].email) {
+      emailByAccountId[accountsList[i].id] = accountsList[i].email;
+    }
+  }
+
+  const projectRows = (vault.projects || []).map((prj, idx) => [
+    idx + 1,
+    prj.name || '',
+    prj.email || emailByAccountId[prj.accountId] || '',
+    prj.notes || '',
+    prj.id || '',
+    prj.accountId || '',
+    prj.updatedAt || nowIso,
+  ]);
+  writeTableRows(ss, 'Projects', projectRows, []);
 
   const cloudRows = (vault.cloudProjects || []).map((c) => [
     c.id || '',

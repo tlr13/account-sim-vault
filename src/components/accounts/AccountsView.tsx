@@ -4,6 +4,7 @@ import {
   Copy,
   Edit3,
   FileText,
+  FolderKanban,
   LayoutGrid,
   Plus,
   ShieldCheck,
@@ -17,6 +18,7 @@ import {
   ACCOUNT_STATUS_META,
   type AccountStatus,
   type GoogleAccount,
+  type ProjectItem,
   type VaultData,
   type ViewMode,
 } from '../../types/models';
@@ -26,6 +28,7 @@ interface AccountsViewProps {
   vault: VaultData;
   privacyMask: boolean;
   onOpenAccount: (accountId: string) => void;
+  onOpenProjects: () => void;
   onAddAccount: () => void;
   onEditAccount: (account: GoogleAccount) => void;
   onSaveAccountNotes: (account: GoogleAccount, notes: string) => void;
@@ -40,6 +43,7 @@ export function AccountsView({
   vault,
   privacyMask,
   onOpenAccount,
+  onOpenProjects,
   onAddAccount,
   onEditAccount,
   onSaveAccountNotes,
@@ -59,6 +63,22 @@ export function AccountsView({
     () => new Map(vault.phoneNumbers.map((p) => [p.id, p])),
     [vault.phoneNumbers]
   );
+
+  const projectsByAccountId = useMemo(() => {
+    const map = new Map<string, ProjectItem[]>();
+    for (const acc of vault.googleAccounts) {
+      const emailLower = acc.email.trim().toLowerCase();
+      const matched = vault.projects.filter(
+        (p) =>
+          p.accountId === acc.id ||
+          (emailLower !== '' && p.email.trim().toLowerCase() === emailLower)
+      );
+      if (matched.length > 0) {
+        map.set(acc.id, matched);
+      }
+    }
+    return map;
+  }, [vault.googleAccounts, vault.projects]);
 
   const counts = useMemo(() => {
     const map = {
@@ -97,6 +117,7 @@ export function AccountsView({
         return false;
       }
       if (!q) return true;
+      const linkedProjects = projectsByAccountId.get(acc.id) ?? [];
       return [
         acc.email,
         acc.aliasLabel,
@@ -109,12 +130,13 @@ export function AccountsView({
         acc.chromeProfile,
         acc.tags.join(' '),
         acc.notes,
+        linkedProjects.map((p) => p.name).join(' '),
       ]
         .join(' ')
         .toLowerCase()
         .includes(q);
     });
-  }, [vault.googleAccounts, statusFilter, localFilter]);
+  }, [vault.googleAccounts, projectsByAccountId, statusFilter, localFilter]);
 
   const startEditingNotes = (acc: GoogleAccount) => {
     setEditingNotesId(acc.id);
@@ -441,8 +463,24 @@ export function AccountsView({
                             style={{ padding: '6px 9px', fontSize: 12.5 }}
                             onClick={() => startEditingNotes(acc)}
                           >
-                            {acc.notes || '+ Tulis catatan / list project...'}
+                            {acc.notes || '+ Tulis catatan bebas...'}
                           </button>
+                        </div>
+                      )}
+                      {(projectsByAccountId.get(acc.id)?.length ?? 0) > 0 && (
+                        <div className="card-projects-chips" style={{ marginTop: 6 }}>
+                          {(projectsByAccountId.get(acc.id) ?? []).map((prj) => (
+                            <button
+                              key={prj.id}
+                              type="button"
+                              className="project-chip"
+                              title="Buka daftar Project"
+                              onClick={onOpenProjects}
+                            >
+                              <FolderKanban size={11} />
+                              <span>{prj.name}</span>
+                            </button>
+                          ))}
                         </div>
                       )}
                     </td>
@@ -480,6 +518,7 @@ export function AccountsView({
             const statusMeta = ACCOUNT_STATUS_META[acc.status] ?? ACCOUNT_STATUS_META.Active;
             const linkedPhone = phoneById.get(acc.linkedPhoneId);
             const phoneHealth = linkedPhone ? getSimHealth(linkedPhone) : null;
+            const linkedProjects = projectsByAccountId.get(acc.id) ?? [];
             const isEditingCardNotes = editingNotesId === acc.id;
 
             return (
@@ -605,7 +644,44 @@ export function AccountsView({
                   </div>
                 )}
 
-                {/* Bagian Bawah: Catatan Bebas / List Project Inline */}
+                {/* Daftar Project Otomatis yang Memakai Email Ini */}
+                {linkedProjects.length > 0 && (
+                  <div
+                    className="card-projects-section"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="card-notes-header">
+                      <span
+                        className="sim-date-label"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                      >
+                        <FolderKanban size={12} /> Project ({linkedProjects.length})
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ height: 24, padding: '0 7px', fontSize: 11.5 }}
+                        onClick={onOpenProjects}
+                      >
+                        Kelola
+                      </button>
+                    </div>
+                    <div className="card-projects-chips">
+                      {linkedProjects.map((prj) => (
+                        <button
+                          key={prj.id}
+                          type="button"
+                          className="project-chip"
+                          onClick={onOpenProjects}
+                        >
+                          <span>{prj.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Bagian Bawah: Catatan Bebas Inline */}
                 <div
                   className="card-notes-section"
                   onClick={(e) => e.stopPropagation()}
@@ -635,7 +711,7 @@ export function AccountsView({
                         className="form-textarea"
                         rows={4}
                         autoFocus
-                        placeholder={'Tulis bebas apa saja yang dilakukan dengan email ini...\nContoh:\n- Project Antigravity: AccVault\n- Project Antigravity: Laporan Otomatis'}
+                        placeholder={'Tulis bebas apa saja yang dilakukan dengan email ini...\nContoh:\n- Dipakai untuk login GitHub & Vercel\n- Catatan tambahan lainnya'}
                         value={notesDraft}
                         onChange={(e) => setNotesDraft(e.target.value)}
                       />
@@ -659,7 +735,7 @@ export function AccountsView({
                       onClick={() => startEditingNotes(acc)}
                     >
                       {acc.notes ||
-                        '+ Ketuk untuk tulis catatan atau list project Antigravity di akun ini...'}
+                        '+ Ketuk untuk tulis catatan bebas di akun ini...'}
                     </button>
                   )}
                 </div>
