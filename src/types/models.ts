@@ -356,6 +356,30 @@ export function normalizeProjectRecord(raw: Partial<ProjectItem>): ProjectItem {
   };
 }
 
+export function reorderProjectList(
+  projects: ProjectItem[],
+  sourceId: string,
+  targetId: string,
+  position: 'before' | 'after'
+): ProjectItem[] {
+  if (!sourceId || !targetId || sourceId === targetId) return projects;
+  const sourceIndex = projects.findIndex((p) => p.id === sourceId);
+  if (sourceIndex === -1) return projects;
+  if (!projects.some((p) => p.id === targetId)) return projects;
+
+  const moved = projects[sourceIndex];
+  const remaining = projects.filter((p) => p.id !== sourceId);
+  const targetIndex = remaining.findIndex((p) => p.id === targetId);
+  if (targetIndex === -1) return projects;
+
+  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+  const next = [...remaining];
+  next.splice(insertIndex, 0, moved);
+
+  const unchanged = next.every((item, i) => item.id === projects[i].id);
+  return unchanged ? projects : next;
+}
+
 export function normalizeAccountRecord(raw: Partial<GoogleAccount>): GoogleAccount {
   return {
     id: raw.id || generateId('acc'),

@@ -3,14 +3,16 @@ import {
   Copy,
   Edit3,
   FolderKanban,
+  GripVertical,
   Plus,
   Search,
   Trash2,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   generateId,
+  reorderProjectList,
   type GoogleAccount,
   type ProjectItem,
   type VaultData,
@@ -20,6 +22,7 @@ interface ProjectsViewProps {
   vault: VaultData;
   onSaveProject: (project: ProjectItem) => void;
   onDeleteProject: (id: string) => void;
+  onReorderProjects: (projects: ProjectItem[]) => void;
   onOpenAccount: (accountId: string) => void;
   onCopy: (text: string, label: string) => void;
 }
@@ -30,6 +33,7 @@ export function ProjectsView({
   vault,
   onSaveProject,
   onDeleteProject,
+  onReorderProjects,
   onOpenAccount,
   onCopy,
 }: ProjectsViewProps) {
@@ -47,6 +51,14 @@ export function ProjectsView({
   const [editEmailChoice, setEditEmailChoice] = useState('');
   const [editCustomEmail, setEditCustomEmail] = useState('');
   const [editNotes, setEditNotes] = useState('');
+
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    position: 'before' | 'after';
+  } | null>(null);
+  const touchDragIdRef = useRef<string | null>(null);
+  const dropTargetRef = useRef<{ id: string; position: 'before' | 'after' } | null>(null);
 
   const accountById = useMemo(
     () => new Map(vault.googleAccounts.map((a) => [a.id, a])),
@@ -187,14 +199,71 @@ export function ProjectsView({
     cancelEditing();
   };
 
+  const resetDragState = () => {
+    setDraggedId(null);
+    setDropTarget(null);
+    touchDragIdRef.current = null;
+    dropTargetRef.current = null;
+  };
+
+  const applyReorder = (sourceId: string, targetId: string, position: 'before' | 'after') => {
+    const next = reorderProjectList(vault.projects, sourceId, targetId, position);
+    if (next !== vault.projects) {
+      onReorderProjects(next);
+    }
+  };
+
+  const handleTouchStartHandle = (prjId: string) => {
+    touchDragIdRef.current = prjId;
+    setDraggedId(prjId);
+  };
+
+  const handleTouchMoveHandle = (e: React.TouchEvent) => {
+    const sourceId = touchDragIdRef.current;
+    if (!sourceId) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const row = el?.closest('tr[data-project-row-id]') as HTMLTableRowElement | null;
+    const targetId = row?.dataset.projectRowId;
+    if (!row || !targetId || targetId === sourceId) {
+      if (dropTargetRef.current !== null) {
+        dropTargetRef.current = null;
+        setDropTarget(null);
+      }
+      return;
+    }
+    const rect = row.getBoundingClientRect();
+    const position: 'before' | 'after' =
+      touch.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    if (
+      dropTargetRef.current?.id !== targetId ||
+      dropTargetRef.current?.position !== position
+    ) {
+      const nextTarget = { id: targetId, position };
+      dropTargetRef.current = nextTarget;
+      setDropTarget(nextTarget);
+    }
+  };
+
+  const handleTouchEndHandle = () => {
+    const sourceId = touchDragIdRef.current;
+    const target = dropTargetRef.current;
+    if (sourceId && target && sourceId !== target.id) {
+      applyReorder(sourceId, target.id, target.position);
+    }
+    resetDragState();
+  };
+
   return (
     <>
       <div className="page-header">
         <div>
           <h1 className="page-title">Daftar Project ({vault.projects.length})</h1>
           <p className="page-subtitle">
-            Catat project terlebih dahulu lalu pilih email Google yang dipakai. Otomatis muncul di
-            kartu akun terkait dan sinkron ke tab <strong>Projects</strong> di Google Sheets.
+            Catat project terlebih dahulu lalu pilih email Google yang dipakai. Tarik baris ke atas
+            atau bawah untuk mengubah urutan — otomatis sinkron ke tab <strong>Projects</strong> di
+            Google Sheets.
           </p>
         </div>
       </div>
@@ -335,7 +404,7 @@ export function ProjectsView({
           <table className="data-table project-table">
             <thead>
               <tr>
-                <th style={{ width: 44, textAlign: 'center' }}>No</th>
+                <th style={{ width: 66, textAlign: 'center' }}>No</th>
                 <th>Project</th>
                 <th>Email</th>
                 <th style={{ width: 96, textAlign: 'right' }}>Aksi</th>
@@ -346,6 +415,13 @@ export function ProjectsView({
                 const email = resolveProjectEmail(prj);
                 const matchedAcc = resolveProjectAccount(prj);
                 const isEditing = editingId === prj.id;
+                const isDragging = draggedId === prj.id;
+                const dropClass =
+                  dropTarget?.id === prj.id
+                    ? dropTarget.position === 'before'
+                      ? ' drop-before'
+                      : ' drop-after'
+                    : '';
 
                 if (isEditing) {
                   return (
@@ -425,12 +501,74 @@ export function ProjectsView({
                 }
 
                 return (
-                  <tr key={prj.id}>
+                  <tr
+                    key={prj.id}
+                    data-project-row-id={prj.id}
+                    draggable
+                    className={`project-row-draggable${isDragging ? ' is-dragging' : ''}${dropClass}`}
+                    onDragStart={(e) => {
+                      setDraggedId(prj.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', prj.id);
+                    }}
+                    onDragOver={(e) => {
+                      const activeSource = draggedId || e.dataTransfer.getData('text/plain');
+                      if (!activeSource || activeSource === prj.id) {
+                        if (dropTargetRef.current?.id === prj.id) {
+                          dropTargetRef.current = null;
+                          setDropTarget(null);
+                        }
+                        return;
+                      }
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const position: 'before' | 'after' =
+                        e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                      if (
+                        dropTargetRef.current?.id !== prj.id ||
+                        dropTargetRef.current?.position !== position
+                      ) {
+                        const nextTarget = { id: prj.id, position };
+                        dropTargetRef.current = nextTarget;
+                        setDropTarget(nextTarget);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const sourceId = draggedId || e.dataTransfer.getData('text/plain');
+                      if (sourceId && sourceId !== prj.id) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const position: 'before' | 'after' =
+                          dropTargetRef.current?.id === prj.id
+                            ? dropTargetRef.current.position
+                            : e.clientY < rect.top + rect.height / 2
+                              ? 'before'
+                              : 'after';
+                        applyReorder(sourceId, prj.id, position);
+                      }
+                      resetDragState();
+                    }}
+                    onDragEnd={resetDragState}
+                  >
                     <td
                       className="mono"
                       style={{ textAlign: 'center', color: 'var(--ink-muted)', fontSize: 12.5 }}
                     >
-                      {idx + 1}
+                      <div className="project-no-cell">
+                        <span
+                          className="project-drag-handle"
+                          title="Tarik ke atas/bawah untuk ubah urutan"
+                          aria-label={`Geser urutan ${prj.name}`}
+                          onTouchStart={() => handleTouchStartHandle(prj.id)}
+                          onTouchMove={handleTouchMoveHandle}
+                          onTouchEnd={handleTouchEndHandle}
+                          onTouchCancel={resetDragState}
+                        >
+                          <GripVertical size={14} />
+                        </span>
+                        <span>{idx + 1}</span>
+                      </div>
                     </td>
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--ink-primary)' }}>{prj.name}</div>

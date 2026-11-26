@@ -777,6 +777,14 @@ export default function App() {
     showToast('Project dihapus.');
   };
 
+  const reorderProjects = (nextProjects: ProjectItem[]) => {
+    commitVault((prev) => ({
+      ...prev,
+      projects: nextProjects,
+    }));
+    showToast('Urutan project diperbarui.');
+  };
+
   const syncModeLabel =
     settings.mode === 'gsheets'
       ? settings.gsheets.scriptUrl
@@ -1073,6 +1081,7 @@ export default function App() {
               vault={vault}
               onSaveProject={saveProject}
               onDeleteProject={deleteProject}
+              onReorderProjects={reorderProjects}
               onOpenAccount={openAccountDetail}
               onCopy={handleCopy}
             />
